@@ -4,30 +4,30 @@
 #include <stdint.h>
 #include <string.h>
 
-#include "dayan_win32.h"
+#include "dy_win32.h"
 
-static void day_win32_close_process_handle(HANDLE *handle)
+static void dy_win32_close_process_handle(HANDLE *handle)
 {
 	if (*handle) CloseHandle(*handle);
 	*handle = NULL;
 }
 
-static day_b32 day_win32_create_process_pipe(HANDLE *read_pipe, HANDLE *write_pipe)
+static dy_b32 dy_win32_create_process_pipe(HANDLE *read_pipe, HANDLE *write_pipe)
 {
 	SECURITY_ATTRIBUTES security = {0};
 	security.nLength = sizeof(security);
 	security.bInheritHandle = TRUE;
 	if (!CreatePipe(read_pipe, write_pipe, &security, 0)) return 0;
 	if (SetHandleInformation(*read_pipe, HANDLE_FLAG_INHERIT, 0)) return 1;
-	day_win32_close_process_handle(read_pipe);
-	day_win32_close_process_handle(write_pipe);
+	dy_win32_close_process_handle(read_pipe);
+	dy_win32_close_process_handle(write_pipe);
 	return 0;
 }
 
-day_Result day_start_process(day_String command, day_Process_Options options, day_Process *process_result)
+dy_Result dy_start_process(dy_String command, dy_Process_Options options, dy_Process *process_result)
 {
-	day_Result result = {0};
-	day_Scratch scratch;
+	dy_Result result = {0};
+	dy_Scratch scratch;
 	STARTUPINFOA startup = {0};
 	PROCESS_INFORMATION process = {0};
 	HANDLE output_read = NULL;
@@ -36,28 +36,28 @@ day_Result day_start_process(day_String command, day_Process_Options options, da
 	HANDLE error_write = NULL;
 	char *mutable_command;
 	char *working_directory = NULL;
-	day_b32 inherit_handles = options.capture_output || options.capture_error;
+	dy_b32 inherit_handles = options.capture_output || options.capture_error;
 
-	if (process_result) *process_result = (day_Process){0};
+	if (process_result) *process_result = (dy_Process){0};
 	if (!process_result || !command.data || command.size == 0)
 	{
-		result.error = DAY_ERROR_INVALID_ARGUMENT;
+		result.error = DY_ERROR_INVALID_ARGUMENT;
 		return result;
 	}
-	scratch = day_begin_scratch();
-	mutable_command = day_win32_text(scratch.arena, command);
+	scratch = dy_begin_scratch();
+	mutable_command = dy_win32_text(scratch.arena, command);
 	if (options.working_directory.size)
 	{
-		working_directory = day_win32_path_text(scratch.arena, options.working_directory);
+		working_directory = dy_win32_path_text(scratch.arena, options.working_directory);
 	}
 	if (!mutable_command || (options.working_directory.size && !working_directory))
 	{
-		result.error = DAY_ERROR_OUT_OF_MEMORY;
-		day_end_scratch(scratch);
+		result.error = DY_ERROR_OUT_OF_MEMORY;
+		dy_end_scratch(scratch);
 		return result;
 	}
-	if (options.capture_output && !day_win32_create_process_pipe(&output_read, &output_write)) goto failure;
-	if (options.capture_error && !day_win32_create_process_pipe(&error_read, &error_write)) goto failure;
+	if (options.capture_output && !dy_win32_create_process_pipe(&output_read, &output_write)) goto failure;
+	if (options.capture_error && !dy_win32_create_process_pipe(&error_read, &error_write)) goto failure;
 
 	startup.cb = sizeof(startup);
 	if (inherit_handles)
@@ -70,38 +70,38 @@ day_Result day_start_process(day_String command, day_Process_Options options, da
 	if (!CreateProcessA(NULL, mutable_command, NULL, NULL, inherit_handles,
 		options.hide_window ? CREATE_NO_WINDOW : 0, NULL, working_directory, &startup, &process)) goto failure;
 
-	day_win32_close_process_handle(&process.hThread);
-	day_win32_close_process_handle(&output_write);
-	day_win32_close_process_handle(&error_write);
-	process_result->handle = (day_uptr)process.hProcess;
-	process_result->standard_output = (day_uptr)output_read;
-	process_result->standard_error = (day_uptr)error_read;
-	day_end_scratch(scratch);
+	dy_win32_close_process_handle(&process.hThread);
+	dy_win32_close_process_handle(&output_write);
+	dy_win32_close_process_handle(&error_write);
+	process_result->handle = (dy_uptr)process.hProcess;
+	process_result->standard_output = (dy_uptr)output_read;
+	process_result->standard_error = (dy_uptr)error_read;
+	dy_end_scratch(scratch);
 	return result;
 
 failure:
 	result.os_error = GetLastError();
-	result.error = day_win32_error(result.os_error);
-	day_win32_close_process_handle(&process.hThread);
-	day_win32_close_process_handle(&process.hProcess);
-	day_win32_close_process_handle(&output_read);
-	day_win32_close_process_handle(&output_write);
-	day_win32_close_process_handle(&error_read);
-	day_win32_close_process_handle(&error_write);
-	day_end_scratch(scratch);
+	result.error = dy_win32_error(result.os_error);
+	dy_win32_close_process_handle(&process.hThread);
+	dy_win32_close_process_handle(&process.hProcess);
+	dy_win32_close_process_handle(&output_read);
+	dy_win32_close_process_handle(&output_write);
+	dy_win32_close_process_handle(&error_read);
+	dy_win32_close_process_handle(&error_write);
+	dy_end_scratch(scratch);
 	return result;
 }
 
-day_b32 day_process_is_valid(day_Process process)
+dy_b32 dy_process_is_valid(dy_Process process)
 {
 	return process.handle != 0;
 }
 
-day_Result day_read_process(day_Process *process, day_Process_Stream stream, void *data,
-	day_u64 capacity, day_u64 *size, day_b32 *end_of_stream)
+dy_Result dy_read_process(dy_Process *process, dy_Process_Stream stream, void *data,
+	dy_u64 capacity, dy_u64 *size, dy_b32 *end_of_stream)
 {
-	day_Result result = {0};
-	day_uptr *pipe_value;
+	dy_Result result = {0};
+	dy_uptr *pipe_value;
 	HANDLE pipe;
 	DWORD available = 0;
 	DWORD received = 0;
@@ -109,12 +109,12 @@ day_Result day_read_process(day_Process *process, day_Process_Stream stream, voi
 	if (size) *size = 0;
 	if (end_of_stream) *end_of_stream = 0;
 	if (!process || !size || !end_of_stream || (!data && capacity) ||
-		(stream != DAY_PROCESS_OUTPUT && stream != DAY_PROCESS_ERROR))
+		(stream != DY_PROCESS_OUTPUT && stream != DY_PROCESS_ERROR))
 	{
-		result.error = DAY_ERROR_INVALID_ARGUMENT;
+		result.error = DY_ERROR_INVALID_ARGUMENT;
 		return result;
 	}
-	pipe_value = stream == DAY_PROCESS_OUTPUT ? &process->standard_output : &process->standard_error;
+	pipe_value = stream == DY_PROCESS_OUTPUT ? &process->standard_output : &process->standard_error;
 	pipe = (HANDLE)*pipe_value;
 	if (!pipe)
 	{
@@ -132,7 +132,7 @@ day_Result day_read_process(day_Process *process, day_Process_Stream stream, voi
 			result.os_error = 0;
 			return result;
 		}
-		result.error = day_win32_error(result.os_error);
+		result.error = dy_win32_error(result.os_error);
 		return result;
 	}
 	if (available == 0 || capacity == 0) return result;
@@ -141,23 +141,23 @@ day_Result day_read_process(day_Process *process, day_Process_Stream stream, voi
 	if (!ReadFile(pipe, data, request, &received, NULL))
 	{
 		result.os_error = GetLastError();
-		result.error = day_win32_error(result.os_error);
+		result.error = dy_win32_error(result.os_error);
 		return result;
 	}
 	*size = received;
 	return result;
 }
 
-day_Result day_wait_process(day_Process process, day_u32 milliseconds, day_b32 *completed, day_u32 *exit_code)
+dy_Result dy_wait_process(dy_Process process, dy_u32 milliseconds, dy_b32 *completed, dy_u32 *exit_code)
 {
-	day_Result result = {0};
+	dy_Result result = {0};
 	DWORD wait;
 	DWORD code;
 	if (completed) *completed = 0;
 	if (exit_code) *exit_code = 0;
-	if (!completed || !exit_code || !day_process_is_valid(process))
+	if (!completed || !exit_code || !dy_process_is_valid(process))
 	{
-		result.error = DAY_ERROR_INVALID_ARGUMENT;
+		result.error = DY_ERROR_INVALID_ARGUMENT;
 		return result;
 	}
 	wait = WaitForSingleObject((HANDLE)process.handle, milliseconds);
@@ -165,13 +165,13 @@ day_Result day_wait_process(day_Process process, day_u32 milliseconds, day_b32 *
 	if (wait != WAIT_OBJECT_0)
 	{
 		result.os_error = GetLastError();
-		result.error = day_win32_error(result.os_error);
+		result.error = dy_win32_error(result.os_error);
 		return result;
 	}
 	if (!GetExitCodeProcess((HANDLE)process.handle, &code))
 	{
 		result.os_error = GetLastError();
-		result.error = day_win32_error(result.os_error);
+		result.error = dy_win32_error(result.os_error);
 		return result;
 	}
 	*completed = 1;
@@ -179,41 +179,41 @@ day_Result day_wait_process(day_Process process, day_u32 milliseconds, day_b32 *
 	return result;
 }
 
-day_Result day_close_process(day_Process *process)
+dy_Result dy_close_process(dy_Process *process)
 {
-	day_Result result = {0};
+	dy_Result result = {0};
 	HANDLE handles[3];
 	if (!process)
 	{
-		result.error = DAY_ERROR_INVALID_ARGUMENT;
+		result.error = DY_ERROR_INVALID_ARGUMENT;
 		return result;
 	}
 	handles[0] = (HANDLE)process->handle;
 	handles[1] = (HANDLE)process->standard_output;
 	handles[2] = (HANDLE)process->standard_error;
-	for (day_u32 index = 0; index < DAY_ARRAY_COUNT(handles); ++index)
+	for (dy_u32 index = 0; index < DY_ARRAY_COUNT(handles); ++index)
 	{
-		if (handles[index] && !CloseHandle(handles[index]) && result.error == DAY_ERROR_NONE)
+		if (handles[index] && !CloseHandle(handles[index]) && result.error == DY_ERROR_NONE)
 		{
 			result.os_error = GetLastError();
-			result.error = day_win32_error(result.os_error);
+			result.error = dy_win32_error(result.os_error);
 		}
 	}
-	*process = (day_Process){0};
+	*process = (dy_Process){0};
 	return result;
 }
 
-day_u64 day_current_process_id(void)
+dy_u64 dy_current_process_id(void)
 {
 	return GetCurrentProcessId();
 }
 
-void day_exit_process(day_i32 exit_code)
+void dy_exit_process(dy_i32 exit_code)
 {
 	ExitProcess((UINT)exit_code);
 }
 
-void day_debug_break(void)
+void dy_debug_break(void)
 {
 	DebugBreak();
 }

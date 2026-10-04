@@ -1,7 +1,7 @@
-#include "dayan.h"
+#include "dy.h"
 
 #if defined(_WIN32)
-#include "win32/dayan_file.c"
+#include "win32/dy_process.c"
 #else
 #error unsupported operating system
 #endif

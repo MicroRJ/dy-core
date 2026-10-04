@@ -1,17 +1,17 @@
 library := {
 	kind = "static_library",
-	name = "dayan",
+	name = "dy",
 	sources = {
-		"src/dayan.c",
-		"src/dayan_memory.c",
-		"src/dayan_file.c",
-		"src/dayan_path.c",
-		"src/dayan_env.c",
-		"src/dayan_process.c",
-		"src/dayan_thread.c",
-		"src/dayan_time.c",
-		"src/dayan_console.c",
-		"src/dayan_error.c",
+		"src/dy.c",
+		"src/dy_memory.c",
+		"src/dy_file.c",
+		"src/dy_path.c",
+		"src/dy_env.c",
+		"src/dy_process.c",
+		"src/dy_thread.c",
+		"src/dy_time.c",
+		"src/dy_console.c",
+		"src/dy_error.c",
 	},
 	public_include_directories = {
 		"include",
@@ -20,9 +20,9 @@ library := {
 
 tests := {
 	kind = "test",
-	name = "dayan_tests",
+	name = "dy_tests",
 	sources = {
-		"tests/dayan_tests.c",
+		"tests/dy_tests.c",
 	},
 	dependencies = {
 		library,
@@ -30,7 +30,7 @@ tests := {
 }
 
 ret {
-	name = "dayan",
+	name = "dy",
 	default_target = library,
 	targets = {
 		library = library,
