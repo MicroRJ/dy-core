@@ -57,6 +57,8 @@ typedef struct dy_Scratch
 }
 dy_Scratch;
 
+// A counted byte string. Data may contain zero bytes and is not necessarily
+// null terminated.
 typedef struct dy_String
 {
 	union
@@ -283,7 +285,7 @@ dy_Scratch dy_begin_different_scratch(dy_Arena *conflict);
 void dy_end_scratch(dy_Scratch scratch);
 void dy_destroy_thread_scratch(void);
 
-dy_String dy_string_from_data(void *data, dy_u64 size);
+dy_String dy_string_from_data(const void *data, dy_u64 size);
 dy_String dy_string_from_range(void *start, void *end);
 dy_String dy_string_from_cstring(const char *text);
 dy_String dy_string_slice(dy_String string, dy_u64 offset, dy_u64 size);

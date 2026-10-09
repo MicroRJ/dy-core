@@ -206,9 +206,9 @@ void dy_destroy_thread_scratch(void)
 	}
 }
 
-dy_String dy_string_from_data(void *data, dy_u64 size)
+dy_String dy_string_from_data(const void *data, dy_u64 size)
 {
-	return (dy_String){ .data = data, .size = size };
+	return (dy_String){ .data = (char *)data, .size = size };
 }
 
 dy_String dy_string_from_range(void *start, void *end)
