@@ -103,6 +103,18 @@ typedef enum dy_Standard_Stream
 }
 dy_Standard_Stream;
 
+typedef enum dy_Log_Level
+{
+	DY_LOG_DEBUG,
+	DY_LOG_INFO,
+	DY_LOG_WARNING,
+	DY_LOG_ERROR,
+}
+dy_Log_Level;
+
+typedef void dy_Log_Sink(void *context, dy_Log_Level level,
+	dy_String subsystem, dy_String message);
+
 #define DY_WAIT_INFINITE ((dy_u32)-1)
 
 typedef dy_u32 dy_Thread_Function(void *context);
@@ -341,6 +353,12 @@ dy_b32 dy_stream_is_console(dy_Standard_Stream stream);
 dy_b32 dy_console_supports_colors(dy_Standard_Stream stream);
 dy_Result dy_enable_console_colors(dy_Standard_Stream stream);
 dy_Result dy_write_console(dy_Standard_Stream stream, const void *data, dy_u64 size, dy_u64 *written);
+
+// Setting a null sink restores the default standard-error sink. Configure the
+// sink during startup; changing it concurrently with logging is unsupported.
+void dy_log_set_sink(dy_Log_Sink *sink, void *context);
+void dy_log(dy_Log_Level level, dy_String subsystem, dy_String message);
+void dy_logf(dy_Log_Level level, dy_String subsystem, const char *format, ...);
 
 dy_Result dy_error_message(dy_Arena *arena, dy_u32 os_error, dy_String *message);
 

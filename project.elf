@@ -11,6 +11,7 @@ library := {
 		"src/dy_thread.c",
 		"src/dy_time.c",
 		"src/dy_console.c",
+		"src/dy_log.c",
 		"src/dy_error.c",
 	},
 	public_include_directories = {
