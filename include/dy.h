@@ -40,6 +40,11 @@ static inline void dy_memory_fill(void *destination, dy_u8 value, dy_u64 size)
 	if (size) memset(destination, value, (size_t)size);
 }
 
+static inline dy_b32 dy_memory_equal(const void *left, const void *right, dy_u64 size)
+{
+	return size == 0 || memcmp(left, right, (size_t)size) == 0;
+}
+
 typedef struct dy_Arena
 {
 	dy_u64 capacity;
