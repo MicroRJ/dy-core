@@ -3,6 +3,7 @@
 
 #include <stdarg.h>
 #include <stdint.h>
+#include <string.h>
 
 typedef uint8_t  dy_u8;
 typedef uint16_t dy_u16;
@@ -22,6 +23,22 @@ typedef uintptr_t dy_uptr;
 #define DY_MEGABYTES(value) ((dy_u64)(value) << 20)
 #define DY_GIGABYTES(value) ((dy_u64)(value) << 30)
 #define DY_PATH_CAPACITY 32768
+
+// Source and destination must not overlap.
+static inline void dy_memory_copy(void *destination, const void *source, dy_u64 size)
+{
+	if (size) memcpy(destination, source, (size_t)size);
+}
+
+static inline void dy_memory_zero(void *destination, dy_u64 size)
+{
+	if (size) memset(destination, 0, (size_t)size);
+}
+
+static inline void dy_memory_fill(void *destination, dy_u8 value, dy_u64 size)
+{
+	if (size) memset(destination, value, (size_t)size);
+}
 
 typedef struct dy_Arena
 {
