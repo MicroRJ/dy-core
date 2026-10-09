@@ -236,7 +236,7 @@ dy_b32 dy_executable_resolves(dy_String name)
 	if (!name.data || name.size == 0) return 0;
 	scratch = dy_begin_scratch();
 	native_name = dy_win32_path_text(scratch.arena, name);
-	resolved = dy_arena_push(scratch.arena, capacity);
+	resolved = dy_arena_push(scratch.arena, capacity, 1);
 	if (!native_name || !resolved)
 	{
 		dy_end_scratch(scratch);

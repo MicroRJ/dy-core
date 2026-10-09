@@ -76,7 +76,7 @@ dy_Result dy_create_directories(dy_String path)
 		return result;
 	}
 	scratch = dy_begin_scratch();
-	storage = dy_arena_push(scratch.arena, path.size + 1);
+	storage = dy_arena_push(scratch.arena, path.size + 1, 1);
 	if (!storage || !dy_path_builder_init(&builder, storage, path.size + 1, path))
 	{
 		result.error = DY_ERROR_OUT_OF_MEMORY;
@@ -165,7 +165,7 @@ dy_Result dy_remove_tree(dy_String path)
 		return result;
 	}
 	scratch = dy_begin_scratch();
-	storage = dy_arena_push(scratch.arena, DY_PATH_CAPACITY);
+	storage = dy_arena_push(scratch.arena, DY_PATH_CAPACITY, 1);
 	if (!storage || !dy_path_builder_init(&builder, storage, DY_PATH_CAPACITY, path)) result.error = DY_ERROR_OUT_OF_MEMORY;
 	else result = dy_remove_tree_builder(&builder);
 	dy_end_scratch(scratch);

@@ -86,41 +86,41 @@ void *dy_arena_reserve(dy_Arena *arena, dy_u64 size)
 	return arena->data + arena->used;
 }
 
-void dy_arena_align(dy_Arena *arena, dy_u64 alignment)
+void *dy_arena_push(dy_Arena *arena, dy_u64 size, dy_u64 alignment)
 {
 	uintptr_t top;
 	dy_u64 padding;
 	assert(arena && alignment && (alignment & (alignment - 1)) == 0);
-	if (!arena || !alignment || (alignment & (alignment - 1)) != 0) return;
+	if (!arena || !alignment || (alignment & (alignment - 1)) != 0) return NULL;
 	top = (uintptr_t)dy_arena_top(arena);
 	padding = (alignment - top % alignment) % alignment;
-	dy_arena_push(arena, padding);
-}
-
-void *dy_arena_push(dy_Arena *arena, dy_u64 size)
-{
-	void *result = dy_arena_reserve(arena, size);
-	if (result) arena->used += size;
+	if (size > ~(dy_u64)0 - padding) return NULL;
+	void *result = dy_arena_reserve(arena, padding + size);
+	if (result)
+	{
+		result = (dy_u8 *)result + padding;
+		arena->used += padding + size;
+	}
 	return result;
 }
 
-void *dy_arena_push_zero(dy_Arena *arena, dy_u64 size)
+void *dy_arena_push_zero(dy_Arena *arena, dy_u64 size, dy_u64 alignment)
 {
-	void *result = dy_arena_push(arena, size);
+	void *result = dy_arena_push(arena, size, alignment);
 	if (result && size) memset(result, 0, (size_t)size);
 	return result;
 }
 
-void *dy_arena_push_copy(dy_Arena *arena, dy_u64 size, const void *data)
+void *dy_arena_push_copy(dy_Arena *arena, dy_u64 size, dy_u64 alignment, const void *data)
 {
-	void *result = dy_arena_push(arena, size);
+	void *result = dy_arena_push(arena, size, alignment);
 	if (result && size) memcpy(result, data, (size_t)size);
 	return result;
 }
 
 char *dy_arena_push_data(dy_Arena *arena, const void *data, dy_u64 size)
 {
-	return dy_arena_push_copy(arena, size, data);
+	return dy_arena_push_copy(arena, size, 1, data);
 }
 
 char *dy_arena_push_text(dy_Arena *arena, const char *text)
@@ -130,14 +130,14 @@ char *dy_arena_push_text(dy_Arena *arena, const char *text)
 
 char *dy_arena_push_char(dy_Arena *arena, char character)
 {
-	char *result = dy_arena_push(arena, 1);
+	char *result = dy_arena_push(arena, 1, 1);
 	if (result) *result = character;
 	return result;
 }
 
 void dy_arena_push_nchar(dy_Arena *arena, char character, dy_u64 count)
 {
-	void *result = dy_arena_push(arena, count);
+	void *result = dy_arena_push(arena, count, 1);
 	if (result && count) memset(result, character, (size_t)count);
 }
 
@@ -317,8 +317,7 @@ dy_String_Array dy_string_split(dy_Arena *arena, dy_String string, char separato
 		}
 	}
 
-	dy_arena_align(arena, _Alignof(dy_String));
-	result.items = dy_arena_push_zero(arena, sizeof(*result.items) * count);
+	result.items = dy_arena_push_zero(arena, sizeof(*result.items) * count, _Alignof(dy_String));
 	if (!result.items) return (dy_String_Array){0};
 
 	for (dy_u64 index = 0; index <= string.size; ++index)

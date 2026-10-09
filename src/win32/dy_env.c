@@ -110,8 +110,7 @@ dy_Result dy_get_env_table(dy_Arena *arena, dy_Env_Table *table)
 	}
 
 	mark = dy_arena_mark(arena);
-	dy_arena_align(arena, _Alignof(dy_Env_Field));
-	table->items = dy_arena_push_zero(arena, count * sizeof(*table->items));
+	table->items = dy_arena_push_zero(arena, count * sizeof(*table->items), _Alignof(dy_Env_Field));
 	if (!table->items && count)
 	{
 		result.error = DY_ERROR_OUT_OF_MEMORY;
