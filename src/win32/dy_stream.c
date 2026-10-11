@@ -162,6 +162,83 @@ failure:
 	return result;
 }
 
+dy_Result dy_standard_stream_open(dy_Standard_Stream standard, dy_Stream **stream)
+{
+	dy_Result result = {0};
+	DWORD standard_handle = 0;
+	dy_u32 capabilities = 0;
+	if (stream)
+	{
+		*stream = NULL;
+	}
+	if (!stream)
+	{
+		result.error = DY_ERROR_INVALID_ARGUMENT;
+	}
+	else if (standard == DY_STANDARD_INPUT)
+	{
+		standard_handle = STD_INPUT_HANDLE;
+		capabilities = DY_STREAM_CAN_READ;
+	}
+	else if (standard == DY_STANDARD_OUTPUT)
+	{
+		standard_handle = STD_OUTPUT_HANDLE;
+		capabilities = DY_STREAM_CAN_WRITE;
+	}
+	else if (standard == DY_STANDARD_ERROR)
+	{
+		standard_handle = STD_ERROR_HANDLE;
+		capabilities = DY_STREAM_CAN_WRITE;
+	}
+	else
+	{
+		result.error = DY_ERROR_INVALID_ARGUMENT;
+	}
+	if (result.error == DY_ERROR_NONE)
+	{
+		SetLastError(ERROR_SUCCESS);
+		HANDLE source = GetStdHandle(standard_handle);
+		if (!source || source == INVALID_HANDLE_VALUE)
+		{
+			result.os_error = GetLastError();
+			result.error = result.os_error ? dy_win32_error(result.os_error) : DY_ERROR_NOT_FOUND;
+		}
+		else
+		{
+			HANDLE duplicate = NULL;
+			if (!DuplicateHandle(GetCurrentProcess(), source, GetCurrentProcess(), &duplicate, 0, FALSE, DUPLICATE_SAME_ACCESS))
+			{
+				result = dy_win32_io_error(GetLastError());
+			}
+			else
+			{
+				SetLastError(ERROR_SUCCESS);
+				DWORD file_type = GetFileType(duplicate);
+				DWORD file_type_error = file_type == FILE_TYPE_UNKNOWN ? GetLastError() : ERROR_SUCCESS;
+				if (file_type == FILE_TYPE_UNKNOWN && file_type_error != ERROR_SUCCESS)
+				{
+					result = dy_win32_io_error(file_type_error);
+					CloseHandle(duplicate);
+				}
+				else
+				{
+					dy_Win32_Stream_Kind kind = file_type == FILE_TYPE_PIPE ? DY_WIN32_STREAM_PIPE : DY_WIN32_STREAM_FILE;
+					if (standard == DY_STANDARD_INPUT && kind == DY_WIN32_STREAM_PIPE)
+					{
+						capabilities |= DY_STREAM_CAN_READ_AVAILABLE;
+					}
+					result = dy_win32_stream_create(duplicate, capabilities, kind, stream);
+					if (result.error != DY_ERROR_NONE)
+					{
+						CloseHandle(duplicate);
+					}
+				}
+			}
+		}
+	}
+	return result;
+}
+
 dy_Result dy_file_stream_open(dy_String path, dy_File_Intent intent,
 	dy_File_Access access, dy_Stream **stream)
 {

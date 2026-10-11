@@ -188,6 +188,7 @@ dy_Process_Status;
 
 typedef enum dy_Standard_Stream
 {
+	DY_STANDARD_INPUT,
 	DY_STANDARD_OUTPUT,
 	DY_STANDARD_ERROR,
 }
@@ -369,6 +370,7 @@ void dy_stream_close(dy_Stream *stream);
 
 dy_Result dy_pipe_create(dy_Pipe *pipe);
 void dy_pipe_close(dy_Pipe *pipe);
+dy_Result dy_standard_stream_open(dy_Standard_Stream standard, dy_Stream **stream);
 dy_Result dy_file_stream_open(dy_String path, dy_File_Intent intent,
 	dy_File_Access access, dy_Stream **stream);
 
