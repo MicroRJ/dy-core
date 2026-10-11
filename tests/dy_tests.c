@@ -1,6 +1,7 @@
 #include "dy.h"
 
 #include <assert.h>
+#include <stdio.h>
 #include <string.h>
 
 typedef struct Thread_Test_Context {
@@ -19,8 +20,19 @@ static dy_u32 thread_test_main(void *context_pointer)
 	return 7;
 }
 
-int main(void)
+int main(int argument_count, char **arguments)
 {
+	if (argument_count == 2 && strcmp(arguments[1], "--dy-stream-child") == 0)
+	{
+		char buffer[256];
+		size_t size;
+		while ((size = fread(buffer, 1, sizeof(buffer), stdin)) != 0)
+		{
+			if (fwrite(buffer, 1, size, stdout) != size) return 2;
+		}
+		return ferror(stdin) ? 1 : 0;
+	}
+
 	dy_Arena arena = dy_arena_create(DY_KILOBYTES(64));
 	assert(arena.data);
 	assert(dy_arena_push(&arena, 1, 1));
@@ -55,6 +67,42 @@ int main(void)
 	assert(dy_read_file(file, actual, sizeof(actual), &transferred).error == DY_ERROR_NONE);
 	assert(transferred == sizeof(actual) && memcmp(actual, expected, sizeof(expected)) == 0);
 	assert(dy_close_file(file).error == DY_ERROR_NONE);
+
+	dy_Stream *file_stream;
+	assert(dy_file_stream_open(DY_LIT("build/dy_test/a/stream.tmp"), DY_FILE_CREATE_ALWAYS,
+		DY_FILE_WRITE, &file_stream).error == DY_ERROR_NONE);
+	assert(dy_stream_write(file_stream, expected, sizeof(expected),
+		&transferred).error == DY_ERROR_NONE && transferred == sizeof(expected));
+	assert(dy_stream_read(file_stream, actual, sizeof(actual), 0,
+		&transferred).error == DY_ERROR_NOT_SUPPORTED);
+	dy_stream_close(file_stream);
+	assert(dy_file_stream_open(DY_LIT("build/dy_test/a/stream.tmp"), DY_FILE_OPEN_EXISTING,
+		DY_FILE_READ | DY_FILE_SHARE_READ, &file_stream).error == DY_ERROR_NONE);
+	memset(actual, 0, sizeof(actual));
+	assert(dy_stream_read(file_stream, actual, sizeof(actual), DY_STREAM_READ_AVAILABLE,
+		&transferred).error == DY_ERROR_NONE && transferred == sizeof(actual));
+	assert(memcmp(actual, expected, sizeof(expected)) == 0);
+	assert(dy_stream_read(file_stream, actual, sizeof(actual), 0,
+		&transferred).error == DY_ERROR_END_OF_STREAM);
+	dy_stream_close(file_stream);
+
+	dy_Pipe pipe;
+	assert(dy_pipe_create(&pipe).error == DY_ERROR_NONE);
+	assert(dy_stream_read(pipe.reader, actual, sizeof(actual),
+		DY_STREAM_READ_AVAILABLE, &transferred).error == DY_ERROR_WOULD_BLOCK);
+	assert(dy_stream_read(pipe.writer, actual, sizeof(actual), 0,
+		&transferred).error == DY_ERROR_NOT_SUPPORTED);
+	assert(dy_stream_write(pipe.writer, expected, sizeof(expected),
+		&transferred).error == DY_ERROR_NONE && transferred == sizeof(expected));
+	memset(actual, 0, sizeof(actual));
+	assert(dy_stream_read(pipe.reader, actual, sizeof(actual), DY_STREAM_READ_AVAILABLE,
+		&transferred).error == DY_ERROR_NONE && transferred == sizeof(actual));
+	assert(memcmp(actual, expected, sizeof(expected)) == 0);
+	dy_stream_close(pipe.writer);
+	pipe.writer = NULL;
+	assert(dy_stream_read(pipe.reader, actual, sizeof(actual),
+		DY_STREAM_READ_AVAILABLE, &transferred).error == DY_ERROR_END_OF_STREAM);
+	dy_pipe_close(&pipe);
 
 	dy_File_Info info;
 	assert(dy_get_file_info(DY_LIT("build/dy_test/a/source.tmp"), &info).error == DY_ERROR_NONE);
@@ -91,6 +139,57 @@ int main(void)
 	assert(executable_path.size > 0);
 	assert(dy_executable_resolves(DY_LIT("cmd")));
 
+	dy_Pipe process_input;
+	dy_Pipe process_stdout;
+	assert(dy_pipe_create(&process_input).error == DY_ERROR_NONE);
+	assert(dy_pipe_create(&process_stdout).error == DY_ERROR_NONE);
+	dy_String child_arguments[] = {
+		executable_path,
+		DY_LIT("--dy-stream-child"),
+	};
+	dy_Process stream_process;
+	assert(dy_process_start((dy_Process_Start_Options){
+		.arguments = { child_arguments, DY_ARRAY_COUNT(child_arguments) },
+		.standard_input = process_input.reader,
+		.standard_output = process_stdout.writer,
+		.hide_window = 1,
+	}, &stream_process).error == DY_ERROR_NONE);
+	dy_stream_close(process_input.reader);
+	process_input.reader = NULL;
+	dy_stream_close(process_stdout.writer);
+	process_stdout.writer = NULL;
+	const char stream_message[] = "streamed through child";
+	dy_u64 sent = 0;
+	while (sent < sizeof(stream_message))
+	{
+		assert(dy_stream_write(process_input.writer, stream_message + sent,
+			sizeof(stream_message) - sent, &transferred).error == DY_ERROR_NONE);
+		assert(transferred > 0);
+		sent += transferred;
+	}
+	dy_stream_close(process_input.writer);
+	process_input.writer = NULL;
+	dy_Process_Status process_status;
+	dy_u32 stream_exit_code;
+	assert(dy_process_wait(stream_process, DY_WAIT_INFINITE, &process_status,
+		&stream_exit_code).error == DY_ERROR_NONE);
+	assert(process_status == DY_PROCESS_EXITED && stream_exit_code == 0);
+	char stream_output[sizeof(stream_message)] = {0};
+	dy_u64 received = 0;
+	while (received < sizeof(stream_output))
+	{
+		assert(dy_stream_read(process_stdout.reader, stream_output + received,
+			sizeof(stream_output) - received, 0, &transferred).error == DY_ERROR_NONE);
+		assert(transferred > 0);
+		received += transferred;
+	}
+	assert(memcmp(stream_output, stream_message, sizeof(stream_message)) == 0);
+	assert(dy_stream_read(process_stdout.reader, actual, sizeof(actual),
+		0, &transferred).error == DY_ERROR_END_OF_STREAM);
+	dy_pipe_close(&process_input);
+	dy_pipe_close(&process_stdout);
+	assert(dy_process_close(&stream_process).error == DY_ERROR_NONE);
+
 	assert(dy_set_env_field(DY_LIT("DY_TEST_VALUE"), DY_LIT("platapuss")).error == DY_ERROR_NONE);
 	dy_String environment_value;
 	assert(dy_get_env_field(&arena, DY_LIT("DY_TEST_VALUE"), &environment_value).error == DY_ERROR_NONE);
@@ -99,31 +198,17 @@ int main(void)
 	assert(dy_get_env_table(&arena, &environment).error == DY_ERROR_NONE && environment.count > 0);
 	assert(dy_remove_env_field(DY_LIT("DY_TEST_VALUE")).error == DY_ERROR_NONE);
 
+	dy_String missing_arguments[] = {
+		DY_LIT("dy-test-command-that-does-not-exist"),
+	};
 	dy_Process missing_process;
-	dy_Result missing = dy_start_process(DY_LIT("dy-test-command-that-does-not-exist"),
-		(dy_Process_Options){0}, &missing_process);
+	dy_Result missing = dy_process_start((dy_Process_Start_Options){
+		.arguments = { missing_arguments, DY_ARRAY_COUNT(missing_arguments) },
+	}, &missing_process);
 	assert(missing.error == DY_ERROR_NOT_FOUND && missing.os_error != 0);
 	dy_String error_message;
 	assert(dy_error_message(&arena, missing.os_error, &error_message).error == DY_ERROR_NONE);
 	assert(error_message.size > 0);
-
-	dy_Process process;
-	assert(dy_start_process(DY_LIT("cmd.exe /d /c echo platapuss"), (dy_Process_Options){
-		.capture_output = 1,
-		.capture_error = 1,
-		.hide_window = 1,
-	}, &process).error == DY_ERROR_NONE);
-	dy_b32 completed;
-	dy_u32 exit_code;
-	assert(dy_wait_process(process, UINT32_MAX, &completed, &exit_code).error == DY_ERROR_NONE);
-	assert(completed && exit_code == 0);
-	char process_output[64] = {0};
-	dy_b32 end_of_stream;
-	assert(dy_read_process(&process, DY_PROCESS_OUTPUT, process_output, sizeof(process_output),
-		&transferred, &end_of_stream).error == DY_ERROR_NONE);
-	assert(transferred >= sizeof("platapuss") - 1);
-	assert(memcmp(process_output, "platapuss", sizeof("platapuss") - 1) == 0);
-	assert(dy_close_process(&process).error == DY_ERROR_NONE);
 
 	Thread_Test_Context thread_context = {0};
 	dy_Thread thread;

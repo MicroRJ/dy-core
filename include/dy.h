@@ -5,17 +5,17 @@
 #include <stdint.h>
 #include <string.h>
 
-typedef uint8_t  dy_u8;
-typedef uint16_t dy_u16;
-typedef uint32_t dy_u32;
-typedef uint64_t dy_u64;
-typedef int8_t   dy_i8;
-typedef int16_t  dy_i16;
-typedef int32_t  dy_i32;
-typedef int64_t  dy_i64;
-typedef float    dy_f32;
-typedef double   dy_f64;
-typedef dy_i32  dy_b32;
+typedef uint8_t   dy_u8;
+typedef uint16_t  dy_u16;
+typedef uint32_t  dy_u32;
+typedef uint64_t  dy_u64;
+typedef int8_t    dy_i8;
+typedef int16_t   dy_i16;
+typedef int32_t   dy_i32;
+typedef int64_t   dy_i64;
+typedef float     dy_f32;
+typedef double    dy_f64;
+typedef dy_i32    dy_b32;
 typedef uintptr_t dy_uptr;
 
 #define DY_ARRAY_COUNT(array) (sizeof(array) / sizeof((array)[0]))
@@ -96,29 +96,95 @@ typedef struct dy_Env_Table
 }
 dy_Env_Table;
 
+typedef enum dy_Error
+{
+	DY_ERROR_NONE,
+	DY_ERROR_UNKNOWN,
+	DY_ERROR_INVALID_ARGUMENT,
+	DY_ERROR_NOT_FOUND,
+	DY_ERROR_ACCESS_DENIED,
+	DY_ERROR_ALREADY_EXISTS,
+	DY_ERROR_OUT_OF_MEMORY,
+	DY_ERROR_NOT_SUPPORTED,
+	DY_ERROR_BUFFER_TOO_SMALL,
+	DY_ERROR_WOULD_BLOCK,
+	DY_ERROR_END_OF_STREAM,
+}
+dy_Error;
+
+typedef struct dy_Result
+{
+	dy_Error error;
+	dy_u32 os_error;
+}
+dy_Result;
+
+typedef struct dy_Stream dy_Stream;
+
+typedef struct dy_Stream_Ops
+{
+	dy_Result (*read)(dy_Stream *stream, void *data, dy_u64 size, dy_u32 flags,
+		dy_u64 *bytes_read);
+	dy_Result (*write)(dy_Stream *stream, const void *data, dy_u64 size,
+		dy_u64 *bytes_written);
+	void (*destroy)(dy_Stream *stream);
+}
+dy_Stream_Ops;
+
+typedef enum dy_Stream_Capability
+{
+	DY_STREAM_CAN_READ           = 1 << 0,
+	DY_STREAM_CAN_READ_AVAILABLE = 1 << 1,
+	DY_STREAM_CAN_WRITE          = 1 << 2,
+}
+dy_Stream_Capability;
+
+typedef enum dy_Stream_Read_Flag
+{
+	// Return DY_ERROR_WOULD_BLOCK instead of deliberately waiting for new data.
+	DY_STREAM_READ_AVAILABLE = 1 << 0,
+}
+dy_Stream_Read_Flag;
+
+struct dy_Stream
+{
+	// Concrete streams embed this structure as their first member.
+	const dy_Stream_Ops *ops;
+	dy_u32 capabilities;
+};
+
+typedef struct dy_Pipe
+{
+	// Endpoints are independently owned and must each be closed.
+	dy_Stream *reader;
+	dy_Stream *writer;
+}
+dy_Pipe;
+
 typedef struct dy_Process
 {
 	dy_uptr handle;
-	dy_uptr standard_output;
-	dy_uptr standard_error;
 }
 dy_Process;
 
-typedef struct dy_Process_Options
+typedef struct dy_Process_Start_Options
 {
+	// The first argument names the executable and is also passed as argv[0].
+	dy_String_Array arguments;
 	dy_String working_directory;
-	dy_b32 capture_output;
-	dy_b32 capture_error;
+	dy_Stream *standard_input;
+	dy_Stream *standard_output;
+	dy_Stream *standard_error;
 	dy_b32 hide_window;
 }
-dy_Process_Options;
+dy_Process_Start_Options;
 
-typedef enum dy_Process_Stream
+typedef enum dy_Process_Status
 {
-	DY_PROCESS_OUTPUT,
-	DY_PROCESS_ERROR,
+	DY_PROCESS_RUNNING,
+	DY_PROCESS_EXITED,
 }
-dy_Process_Stream;
+dy_Process_Status;
 
 typedef enum dy_Standard_Stream
 {
@@ -160,27 +226,6 @@ typedef struct dy_Condition
 	dy_u64 storage[8];
 }
 dy_Condition;
-
-typedef enum dy_Error
-{
-	DY_ERROR_NONE,
-	DY_ERROR_UNKNOWN,
-	DY_ERROR_INVALID_ARGUMENT,
-	DY_ERROR_NOT_FOUND,
-	DY_ERROR_ACCESS_DENIED,
-	DY_ERROR_ALREADY_EXISTS,
-	DY_ERROR_OUT_OF_MEMORY,
-	DY_ERROR_NOT_SUPPORTED,
-	DY_ERROR_BUFFER_TOO_SMALL,
-}
-dy_Error;
-
-typedef struct dy_Result
-{
-	dy_Error error;
-	dy_u32 os_error;
-}
-dy_Result;
 
 typedef struct dy_File
 {
@@ -315,6 +360,18 @@ dy_Result dy_set_file_cursor(dy_File file, dy_Seek_Origin origin, dy_i64 distanc
 dy_Result dy_read_file(dy_File file, void *data, dy_u64 size, dy_u64 *bytes_read);
 dy_Result dy_write_file(dy_File file, const void *data, dy_u64 size, dy_u64 *bytes_written);
 
+dy_Result dy_stream_read(dy_Stream *stream, void *data, dy_u64 size, dy_u32 flags,
+	dy_u64 *bytes_read);
+dy_Result dy_stream_write(dy_Stream *stream, const void *data, dy_u64 size,
+	dy_u64 *bytes_written);
+// Closing destroys the stream. The caller must clear every pointer to it.
+void dy_stream_close(dy_Stream *stream);
+
+dy_Result dy_pipe_create(dy_Pipe *pipe);
+void dy_pipe_close(dy_Pipe *pipe);
+dy_Result dy_file_stream_open(dy_String path, dy_File_Intent intent,
+	dy_File_Access access, dy_Stream **stream);
+
 dy_b32 dy_path_builder_init(dy_Path_Builder *path, char *storage, dy_u64 capacity, dy_String root);
 dy_Path_Mark dy_path_mark(const dy_Path_Builder *path);
 dy_b32 dy_path_push(dy_Path_Builder *path, dy_String component);
@@ -341,11 +398,16 @@ dy_Result dy_get_env_table(dy_Arena *arena, dy_Env_Table *table);
 dy_Result dy_set_env_field(dy_String name, dy_String value);
 dy_Result dy_remove_env_field(dy_String name);
 
-dy_Result dy_start_process(dy_String command, dy_Process_Options options, dy_Process *process);
 dy_b32 dy_process_is_valid(dy_Process process);
-dy_Result dy_read_process(dy_Process *process, dy_Process_Stream stream, void *data, dy_u64 capacity, dy_u64 *size, dy_b32 *end_of_stream);
-dy_Result dy_wait_process(dy_Process process, dy_u32 milliseconds, dy_b32 *completed, dy_u32 *exit_code);
-dy_Result dy_close_process(dy_Process *process);
+// Process start borrows all streams and duplicates their native handles for
+// the child. The caller retains ownership and should close unused pipe ends.
+dy_Result dy_process_start(dy_Process_Start_Options options, dy_Process *process);
+dy_Result dy_process_poll(dy_Process process, dy_Process_Status *status, dy_u32 *exit_code);
+dy_Result dy_process_wait(dy_Process process, dy_u32 milliseconds,
+	dy_Process_Status *status, dy_u32 *exit_code);
+dy_Result dy_process_kill(dy_Process process, dy_u32 exit_code);
+// Closing releases bookkeeping resources and does not terminate the child.
+dy_Result dy_process_close(dy_Process *process);
 dy_u64 dy_current_process_id(void);
 void dy_exit_process(dy_i32 exit_code);
 void dy_debug_break(void);

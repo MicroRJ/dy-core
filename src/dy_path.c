@@ -171,9 +171,3 @@ dy_Result dy_remove_tree(dy_String path)
 	dy_end_scratch(scratch);
 	return result;
 }
-
-#if defined(_WIN32)
-#include "win32/dy_path.c"
-#else
-#error unsupported operating system
-#endif

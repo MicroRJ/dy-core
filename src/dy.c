@@ -1,5 +1,4 @@
 #include "dy.h"
-#include "dy_memory.h"
 
 #include <assert.h>
 #include <stddef.h>
@@ -13,7 +12,8 @@
 #endif
 
 #define DY_SCRATCH_ARENA_COUNT 4
-#define DY_COMMIT_GRANULARITY DY_KILOBYTES(64)
+#define DY_COMMIT_GRANULARITY  DY_KILOBYTES(64)
+
 
 static DY_THREAD_LOCAL dy_Arena dy_scratch_arenas[DY_SCRATCH_ARENA_COUNT];
 

@@ -1,6 +1,8 @@
 #ifndef DY_WIN32_H
 #define DY_WIN32_H
 
+#include "dy.h"
+
 static inline dy_Error dy_win32_error(DWORD error)
 {
 	switch (error)

@@ -2,92 +2,253 @@
 #include <Windows.h>
 
 #include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
 
+#include "../dy_stream_internal.h"
 #include "dy_win32.h"
 
-static void dy_win32_close_process_handle(HANDLE *handle)
+static void dy_win32_close_handle(HANDLE *handle)
 {
-	if (*handle) CloseHandle(*handle);
+	if (*handle && *handle != INVALID_HANDLE_VALUE) CloseHandle(*handle);
 	*handle = NULL;
 }
 
-static dy_b32 dy_win32_create_process_pipe(HANDLE *read_pipe, HANDLE *write_pipe)
+static dy_b32 dy_win32_string_has_zero(dy_String string)
 {
-	SECURITY_ATTRIBUTES security = {0};
-	security.nLength = sizeof(security);
-	security.bInheritHandle = TRUE;
-	if (!CreatePipe(read_pipe, write_pipe, &security, 0)) return 0;
-	if (SetHandleInformation(*read_pipe, HANDLE_FLAG_INHERIT, 0)) return 1;
-	dy_win32_close_process_handle(read_pipe);
-	dy_win32_close_process_handle(write_pipe);
+	for (dy_u64 index = 0; index < string.size; ++index)
+	{
+		if (string.data[index] == 0) return 1;
+	}
 	return 0;
 }
 
-dy_Result dy_start_process(dy_String command, dy_Process_Options options, dy_Process *process_result)
+// Quote one argv item using the parsing rules used by CommandLineToArgvW and
+// the Microsoft C runtime. Quoting every item keeps construction predictable.
+static char *dy_win32_command_line(dy_Arena *arena, dy_String_Array arguments)
+{
+	dy_u64 capacity = 1;
+	char *result;
+	char *out;
+
+	for (dy_u32 index = 0; index < arguments.count; ++index)
+	{
+		dy_String argument = arguments.items[index];
+		if ((!argument.data && argument.size) || dy_win32_string_has_zero(argument) ||
+			capacity > UINT64_MAX - 3 ||
+			argument.size > (UINT64_MAX - capacity - 3) / 2) return NULL;
+		capacity += argument.size * 2 + 3;
+	}
+	result = dy_arena_reserve(arena, capacity);
+	if (!result) return NULL;
+	out = result;
+	for (dy_u32 index = 0; index < arguments.count; ++index)
+	{
+		dy_String argument = arguments.items[index];
+		if (index) *out++ = ' ';
+		*out++ = '"';
+		for (dy_u64 offset = 0; offset < argument.size;)
+		{
+			dy_u64 slash_count = 0;
+			while (offset < argument.size && argument.data[offset] == '\\')
+			{
+				++slash_count;
+				++offset;
+			}
+			if (offset == argument.size)
+			{
+				for (dy_u64 slash = 0; slash < slash_count * 2; ++slash) *out++ = '\\';
+				break;
+			}
+			if (argument.data[offset] == '"')
+			{
+				for (dy_u64 slash = 0; slash < slash_count * 2 + 1; ++slash) *out++ = '\\';
+				*out++ = '"';
+			}
+			else
+			{
+				for (dy_u64 slash = 0; slash < slash_count; ++slash) *out++ = '\\';
+				*out++ = argument.data[offset];
+			}
+			++offset;
+		}
+		*out++ = '"';
+	}
+	*out++ = 0;
+	arena->used += (dy_u64)(out - result);
+	return result;
+}
+
+static dy_Result dy_win32_duplicate_process_stream(dy_Stream *stream, DWORD standard_stream, dy_u32 required_capability, DWORD null_access, HANDLE *duplicate)
+{
+	dy_Result result = {0};
+	dy_uptr value = 0;
+	HANDLE source;
+	HANDLE temporary = NULL;
+	*duplicate = NULL;
+	if (stream)
+	{
+		if (!dy_stream_get_native_handle(stream, required_capability, &value))
+		{
+			result.error = DY_ERROR_NOT_SUPPORTED;
+			return result;
+		}
+		source = (HANDLE)value;
+	}
+	else
+	{
+		source = GetStdHandle(standard_stream);
+		if (!source || source == INVALID_HANDLE_VALUE)
+		{
+			temporary = CreateFileA("NUL", null_access, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
+			if (temporary == INVALID_HANDLE_VALUE)
+			{
+				result.os_error = GetLastError();
+				result.error = dy_win32_error(result.os_error);
+				return result;
+			}
+			source = temporary;
+		}
+	}
+	if (!DuplicateHandle(GetCurrentProcess(), source, GetCurrentProcess(), duplicate, 0, TRUE, DUPLICATE_SAME_ACCESS))
+	{
+		result.os_error = GetLastError();
+		result.error = dy_win32_error(result.os_error);
+	}
+	if (temporary) CloseHandle(temporary);
+	return result;
+}
+
+static dy_Result dy_win32_start_process_command(char *application, char *command, char *working_directory
+,          dy_Stream  *standard_input
+,          dy_Stream  *standard_output
+,          dy_Stream  *standard_error
+,          dy_b32      hide_window
+,          dy_Process *process_result)
+{
+	dy_Result result = {0};
+	STARTUPINFOEXA startup = {0};
+	PROCESS_INFORMATION process = {0};
+	HANDLE inherited[3] = {0};
+	LPPROC_THREAD_ATTRIBUTE_LIST attributes = NULL;
+	SIZE_T attribute_size = 0;
+	DWORD creation_flags = hide_window ? CREATE_NO_WINDOW : 0;
+	dy_b32 redirect = standard_input || standard_output || standard_error;
+	dy_b32 attributes_initialized = 0;
+
+	*process_result = (dy_Process){0};
+	startup.StartupInfo.cb = sizeof(startup);
+	if (redirect)
+	{
+		result = dy_win32_duplicate_process_stream(standard_input, STD_INPUT_HANDLE, DY_STREAM_CAN_READ, GENERIC_READ, inherited + 0);
+		if (result.error != DY_ERROR_NONE) goto cleanup;
+		result = dy_win32_duplicate_process_stream(standard_output, STD_OUTPUT_HANDLE, DY_STREAM_CAN_WRITE, GENERIC_WRITE, inherited + 1);
+		if (result.error != DY_ERROR_NONE) goto cleanup;
+		result = dy_win32_duplicate_process_stream(standard_error, STD_ERROR_HANDLE, DY_STREAM_CAN_WRITE, GENERIC_WRITE, inherited + 2);
+		if (result.error != DY_ERROR_NONE) goto cleanup;
+
+		InitializeProcThreadAttributeList(NULL, 1, 0, &attribute_size);
+		if (attribute_size == 0)
+		{
+			result.os_error = GetLastError();
+			result.error = dy_win32_error(result.os_error);
+			goto cleanup;
+		}
+		attributes = malloc(attribute_size);
+		if (!attributes)
+		{
+			result.error = DY_ERROR_OUT_OF_MEMORY;
+			goto cleanup;
+		}
+		if (!InitializeProcThreadAttributeList(attributes, 1, 0, &attribute_size))
+		{
+			result.os_error = GetLastError();
+			result.error = dy_win32_error(result.os_error);
+			goto cleanup;
+		}
+		attributes_initialized = 1;
+		if (!UpdateProcThreadAttribute(attributes, 0, PROC_THREAD_ATTRIBUTE_HANDLE_LIST,
+				inherited, sizeof(inherited), NULL, NULL))
+		{
+			result.os_error = GetLastError();
+			result.error = dy_win32_error(result.os_error);
+			goto cleanup;
+		}
+		startup.lpAttributeList = attributes;
+		startup.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
+		startup.StartupInfo.hStdInput = inherited[0];
+		startup.StartupInfo.hStdOutput = inherited[1];
+		startup.StartupInfo.hStdError = inherited[2];
+		creation_flags |= EXTENDED_STARTUPINFO_PRESENT;
+	}
+
+	if (!CreateProcessA(application, command, NULL, NULL, redirect, creation_flags,
+		NULL, working_directory, &startup.StartupInfo, &process))
+	{
+		result.os_error = GetLastError();
+		result.error = dy_win32_error(result.os_error);
+		goto cleanup;
+	}
+	process_result->handle = (dy_uptr)process.hProcess;
+	process.hProcess = NULL;
+
+cleanup:
+	dy_win32_close_handle(&process.hThread);
+	dy_win32_close_handle(&process.hProcess);
+	for (dy_u32 index = 0; index < DY_ARRAY_COUNT(inherited); ++index)
+		dy_win32_close_handle(inherited + index);
+	if (attributes_initialized) DeleteProcThreadAttributeList(attributes);
+	if (attributes)
+	{
+		free(attributes);
+	}
+	return result;
+}
+
+dy_Result dy_process_start(dy_Process_Start_Options options, dy_Process *process_result)
 {
 	dy_Result result = {0};
 	dy_Scratch scratch;
-	STARTUPINFOA startup = {0};
-	PROCESS_INFORMATION process = {0};
-	HANDLE output_read = NULL;
-	HANDLE output_write = NULL;
-	HANDLE error_read = NULL;
-	HANDLE error_write = NULL;
-	char *mutable_command;
+	char *application;
+	char *command;
 	char *working_directory = NULL;
-	dy_b32 inherit_handles = options.capture_output || options.capture_error;
-
 	if (process_result) *process_result = (dy_Process){0};
-	if (!process_result || !command.data || command.size == 0)
+	if (!process_result || !options.arguments.items || options.arguments.count == 0 ||
+		!options.arguments.items[0].data || options.arguments.items[0].size == 0)
 	{
 		result.error = DY_ERROR_INVALID_ARGUMENT;
 		return result;
 	}
-	scratch = dy_begin_scratch();
-	mutable_command = dy_win32_text(scratch.arena, command);
-	if (options.working_directory.size)
+	for (dy_u32 index = 0; index < options.arguments.count; ++index)
 	{
-		working_directory = dy_win32_path_text(scratch.arena, options.working_directory);
+		if ((!options.arguments.items[index].data && options.arguments.items[index].size) ||
+			dy_win32_string_has_zero(options.arguments.items[index]))
+		{
+			result.error = DY_ERROR_INVALID_ARGUMENT;
+			return result;
+		}
 	}
-	if (!mutable_command || (options.working_directory.size && !working_directory))
+	if ((options.working_directory.size && !options.working_directory.data) ||
+		dy_win32_string_has_zero(options.working_directory))
+	{
+		result.error = DY_ERROR_INVALID_ARGUMENT;
+		return result;
+	}
+
+	scratch = dy_begin_scratch();
+	application = dy_win32_path_text(scratch.arena, options.arguments.items[0]);
+	if (options.working_directory.size)
+		working_directory = dy_win32_path_text(scratch.arena, options.working_directory);
+	command = dy_win32_command_line(scratch.arena, options.arguments);
+	if (!application || (options.working_directory.size && !working_directory) || !command)
 	{
 		result.error = DY_ERROR_OUT_OF_MEMORY;
 		dy_end_scratch(scratch);
 		return result;
 	}
-	if (options.capture_output && !dy_win32_create_process_pipe(&output_read, &output_write)) goto failure;
-	if (options.capture_error && !dy_win32_create_process_pipe(&error_read, &error_write)) goto failure;
-
-	startup.cb = sizeof(startup);
-	if (inherit_handles)
-	{
-		startup.dwFlags = STARTF_USESTDHANDLES;
-		startup.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
-		startup.hStdOutput = output_write ? output_write : GetStdHandle(STD_OUTPUT_HANDLE);
-		startup.hStdError = error_write ? error_write : GetStdHandle(STD_ERROR_HANDLE);
-	}
-	if (!CreateProcessA(NULL, mutable_command, NULL, NULL, inherit_handles,
-		options.hide_window ? CREATE_NO_WINDOW : 0, NULL, working_directory, &startup, &process)) goto failure;
-
-	dy_win32_close_process_handle(&process.hThread);
-	dy_win32_close_process_handle(&output_write);
-	dy_win32_close_process_handle(&error_write);
-	process_result->handle = (dy_uptr)process.hProcess;
-	process_result->standard_output = (dy_uptr)output_read;
-	process_result->standard_error = (dy_uptr)error_read;
-	dy_end_scratch(scratch);
-	return result;
-
-failure:
-	result.os_error = GetLastError();
-	result.error = dy_win32_error(result.os_error);
-	dy_win32_close_process_handle(&process.hThread);
-	dy_win32_close_process_handle(&process.hProcess);
-	dy_win32_close_process_handle(&output_read);
-	dy_win32_close_process_handle(&output_write);
-	dy_win32_close_process_handle(&error_read);
-	dy_win32_close_process_handle(&error_write);
+	result = dy_win32_start_process_command(application, command, working_directory,
+		options.standard_input, options.standard_output, options.standard_error,
+		options.hide_window, process_result);
 	dy_end_scratch(scratch);
 	return result;
 }
@@ -97,65 +258,39 @@ dy_b32 dy_process_is_valid(dy_Process process)
 	return process.handle != 0;
 }
 
-dy_Result dy_read_process(dy_Process *process, dy_Process_Stream stream, void *data,
-	dy_u64 capacity, dy_u64 *size, dy_b32 *end_of_stream)
+dy_Result dy_process_poll(dy_Process process, dy_Process_Status *status, dy_u32 *exit_code)
 {
 	dy_Result result = {0};
-	dy_uptr *pipe_value;
-	HANDLE pipe;
-	DWORD available = 0;
-	DWORD received = 0;
-
-	if (size) *size = 0;
-	if (end_of_stream) *end_of_stream = 0;
-	if (!process || !size || !end_of_stream || (!data && capacity) ||
-		(stream != DY_PROCESS_OUTPUT && stream != DY_PROCESS_ERROR))
+	DWORD code;
+	if (status) *status = DY_PROCESS_RUNNING;
+	if (exit_code) *exit_code = 0;
+	if (!status || !exit_code || !dy_process_is_valid(process))
 	{
 		result.error = DY_ERROR_INVALID_ARGUMENT;
 		return result;
 	}
-	pipe_value = stream == DY_PROCESS_OUTPUT ? &process->standard_output : &process->standard_error;
-	pipe = (HANDLE)*pipe_value;
-	if (!pipe)
-	{
-		*end_of_stream = 1;
-		return result;
-	}
-	if (!PeekNamedPipe(pipe, NULL, 0, NULL, &available, NULL))
-	{
-		result.os_error = GetLastError();
-		if (result.os_error == ERROR_BROKEN_PIPE)
-		{
-			CloseHandle(pipe);
-			*pipe_value = 0;
-			*end_of_stream = 1;
-			result.os_error = 0;
-			return result;
-		}
-		result.error = dy_win32_error(result.os_error);
-		return result;
-	}
-	if (available == 0 || capacity == 0) return result;
-	DWORD request = capacity < available ? (DWORD)capacity : available;
-	if (capacity > MAXDWORD && available == MAXDWORD) request = MAXDWORD;
-	if (!ReadFile(pipe, data, request, &received, NULL))
+	if (!GetExitCodeProcess((HANDLE)process.handle, &code))
 	{
 		result.os_error = GetLastError();
 		result.error = dy_win32_error(result.os_error);
 		return result;
 	}
-	*size = received;
+	if (code != STILL_ACTIVE)
+	{
+		*status = DY_PROCESS_EXITED;
+		*exit_code = code;
+	}
 	return result;
 }
 
-dy_Result dy_wait_process(dy_Process process, dy_u32 milliseconds, dy_b32 *completed, dy_u32 *exit_code)
+dy_Result dy_process_wait(dy_Process process, dy_u32 milliseconds,
+	dy_Process_Status *status, dy_u32 *exit_code)
 {
 	dy_Result result = {0};
 	DWORD wait;
-	DWORD code;
-	if (completed) *completed = 0;
+	if (status) *status = DY_PROCESS_RUNNING;
 	if (exit_code) *exit_code = 0;
-	if (!completed || !exit_code || !dy_process_is_valid(process))
+	if (!status || !exit_code || !dy_process_is_valid(process))
 	{
 		result.error = DY_ERROR_INVALID_ARGUMENT;
 		return result;
@@ -168,36 +303,37 @@ dy_Result dy_wait_process(dy_Process process, dy_u32 milliseconds, dy_b32 *compl
 		result.error = dy_win32_error(result.os_error);
 		return result;
 	}
-	if (!GetExitCodeProcess((HANDLE)process.handle, &code))
+	return dy_process_poll(process, status, exit_code);
+}
+
+dy_Result dy_process_kill(dy_Process process, dy_u32 exit_code)
+{
+	dy_Result result = {0};
+	if (!dy_process_is_valid(process))
+	{
+		result.error = DY_ERROR_INVALID_ARGUMENT;
+		return result;
+	}
+	if (!TerminateProcess((HANDLE)process.handle, exit_code))
 	{
 		result.os_error = GetLastError();
 		result.error = dy_win32_error(result.os_error);
-		return result;
 	}
-	*completed = 1;
-	*exit_code = code;
 	return result;
 }
 
-dy_Result dy_close_process(dy_Process *process)
+dy_Result dy_process_close(dy_Process *process)
 {
 	dy_Result result = {0};
-	HANDLE handles[3];
 	if (!process)
 	{
 		result.error = DY_ERROR_INVALID_ARGUMENT;
 		return result;
 	}
-	handles[0] = (HANDLE)process->handle;
-	handles[1] = (HANDLE)process->standard_output;
-	handles[2] = (HANDLE)process->standard_error;
-	for (dy_u32 index = 0; index < DY_ARRAY_COUNT(handles); ++index)
+	if (process->handle && !CloseHandle((HANDLE)process->handle))
 	{
-		if (handles[index] && !CloseHandle(handles[index]) && result.error == DY_ERROR_NONE)
-		{
-			result.os_error = GetLastError();
-			result.error = dy_win32_error(result.os_error);
-		}
+		result.os_error = GetLastError();
+		result.error = dy_win32_error(result.os_error);
 	}
 	*process = (dy_Process){0};
 	return result;
