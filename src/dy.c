@@ -66,7 +66,6 @@ void *dy_arena_reserve(dy_Arena *arena, dy_u64 size)
 
 	if (!arena || !arena->data || size > arena->capacity - arena->used)
 	{
-		assert(!"arena capacity exceeded");
 		return NULL;
 	}
 
@@ -77,7 +76,6 @@ void *dy_arena_reserve(dy_Arena *arena, dy_u64 size)
 		if (committed > arena->capacity) committed = arena->capacity;
 		if (!dy_virtual_commit(arena->data + arena->committed, committed - arena->committed))
 		{
-			assert(!"unable to commit arena memory");
 			return NULL;
 		}
 		arena->committed = committed;

@@ -38,6 +38,7 @@ int main(int argument_count, char **arguments)
 	assert(dy_arena_push(&arena, 1, 1));
 	void *aligned = dy_arena_push(&arena, 1, 64);
 	assert(aligned && (dy_uptr)aligned % 64 == 0);
+	assert(!dy_arena_reserve(&arena, arena.capacity + 1));
 	void *memory = dy_virtual_reserve(DY_KILOBYTES(4));
 	assert(memory && dy_virtual_commit(memory, DY_KILOBYTES(4)));
 	memset(memory, 0x5a, DY_KILOBYTES(4));
