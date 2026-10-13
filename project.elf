@@ -1,7 +1,7 @@
 library := {
 	kind = "static_library",
 	name = "dy",
-	sources = {
+	sources = [
 		"src/dy.c",
 		"src/dy_stream.c",
 		"src/dy_path.c",
@@ -16,21 +16,21 @@ library := {
 		"src/win32/dy_time.c",
 		"src/win32/dy_console.c",
 		"src/win32/dy_error.c",
-	},
-	public_include_directories = {
+	],
+	public_include_directories = [
 		"include",
-	},
+	],
 }
 
 tests := {
 	kind = "test",
 	name = "dy_tests",
-	sources = {
+	sources = [
 		"tests/dy_tests.c",
-	},
-	dependencies = {
+	],
+	dependencies = [
 		library,
-	},
+	],
 }
 
 ret {
