@@ -268,6 +268,16 @@ dy_b32 dy_string_is(dy_String string, const char *text)
 	return dy_string_equal(string, dy_string_from_cstring(text));
 }
 
+dy_b32 dy_string_contains(dy_String string, char character)
+{
+	dy_b32 result = 0;
+	for (dy_u64 index = 0; index < string.size && !result; ++index)
+	{
+		result = string.data[index] == character;
+	}
+	return result;
+}
+
 static dy_b32 dy_ascii_is_whitespace(char character)
 {
 	return character == ' ' || character == '\t' || character == '\r' || character == '\n' || character == '\v' || character == '\f';

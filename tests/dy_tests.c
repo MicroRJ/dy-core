@@ -32,6 +32,17 @@ int main(int argument_count, char **arguments)
 		}
 		return ferror(stdin) ? 1 : 0;
 	}
+	if (argument_count > 1 && strcmp(arguments[1], "--dy-argument-child") == 0)
+	{
+		if (argument_count != 8) return 1;
+		if (strcmp(arguments[2], "plain") != 0) return 2;
+		if (strcmp(arguments[3], "contains spaces") != 0) return 3;
+		if (strcmp(arguments[4], "") != 0) return 4;
+		if (strcmp(arguments[5], "quote\"inside") != 0) return 5;
+		if (strcmp(arguments[6], "trailing\\") != 0) return 6;
+		if (strcmp(arguments[7], "slashes\\\\\"quote") != 0) return 7;
+		return 0;
+	}
 
 	dy_Arena arena = dy_arena_create(DY_KILOBYTES(64));
 	assert(arena.data);
@@ -39,6 +50,11 @@ int main(int argument_count, char **arguments)
 	void *aligned = dy_arena_push(&arena, 1, 64);
 	assert(aligned && (dy_uptr)aligned % 64 == 0);
 	assert(!dy_arena_reserve(&arena, arena.capacity + 1));
+	char embedded_zero[] = { 'a', 0, 'b' };
+	assert(dy_string_contains(DY_LIT("abc"), 'b'));
+	assert(!dy_string_contains(DY_LIT("abc"), 'x'));
+	assert(dy_string_contains(dy_string_from_data(embedded_zero, sizeof(embedded_zero)), 0));
+	assert(!dy_string_contains(DY_LIT("abc"), 0));
 	void *memory = dy_virtual_reserve(DY_KILOBYTES(4));
 	assert(memory && dy_virtual_commit(memory, DY_KILOBYTES(4)));
 	memset(memory, 0x5a, DY_KILOBYTES(4));
@@ -144,12 +160,10 @@ int main(int argument_count, char **arguments)
 	dy_Pipe process_stdout;
 	assert(dy_pipe_create(&process_input).error == DY_ERROR_NONE);
 	assert(dy_pipe_create(&process_stdout).error == DY_ERROR_NONE);
-	dy_String child_arguments[] = {
-		executable_path,
-		DY_LIT("--dy-stream-child"),
-	};
+	dy_String child_arguments[] = { DY_LIT("--dy-stream-child") };
 	dy_Process stream_process;
 	assert(dy_process_start((dy_Process_Start_Options){
+		.executable = executable_path,
 		.arguments = { child_arguments, DY_ARRAY_COUNT(child_arguments) },
 		.standard_input = process_input.reader,
 		.standard_output = process_stdout.writer,
@@ -191,6 +205,27 @@ int main(int argument_count, char **arguments)
 	dy_pipe_close(&process_stdout);
 	assert(dy_process_close(&stream_process).error == DY_ERROR_NONE);
 
+	dy_String argument_values[] = {
+		DY_LIT("--dy-argument-child"),
+		DY_LIT("plain"),
+		DY_LIT("contains spaces"),
+		DY_LIT(""),
+		DY_LIT("quote\"inside"),
+		DY_LIT("trailing\\"),
+		DY_LIT("slashes\\\\\"quote"),
+	};
+	dy_Process argument_process;
+	assert(dy_process_start((dy_Process_Start_Options){
+		.executable = executable_path,
+		.arguments = { argument_values, DY_ARRAY_COUNT(argument_values) },
+		.hide_window = 1,
+	}, &argument_process).error == DY_ERROR_NONE);
+	dy_u32 argument_exit_code;
+	assert(dy_process_wait(argument_process, DY_WAIT_INFINITE, &process_status,
+		&argument_exit_code).error == DY_ERROR_NONE);
+	assert(process_status == DY_PROCESS_EXITED && argument_exit_code == 0);
+	assert(dy_process_close(&argument_process).error == DY_ERROR_NONE);
+
 	assert(dy_set_env_field(DY_LIT("DY_TEST_VALUE"), DY_LIT("platapuss")).error == DY_ERROR_NONE);
 	dy_String environment_value;
 	assert(dy_get_env_field(&arena, DY_LIT("DY_TEST_VALUE"), &environment_value).error == DY_ERROR_NONE);
@@ -199,12 +234,9 @@ int main(int argument_count, char **arguments)
 	assert(dy_get_env_table(&arena, &environment).error == DY_ERROR_NONE && environment.count > 0);
 	assert(dy_remove_env_field(DY_LIT("DY_TEST_VALUE")).error == DY_ERROR_NONE);
 
-	dy_String missing_arguments[] = {
-		DY_LIT("dy-test-command-that-does-not-exist"),
-	};
 	dy_Process missing_process;
 	dy_Result missing = dy_process_start((dy_Process_Start_Options){
-		.arguments = { missing_arguments, DY_ARRAY_COUNT(missing_arguments) },
+		.executable = DY_LIT("dy-test-command-that-does-not-exist"),
 	}, &missing_process);
 	assert(missing.error == DY_ERROR_NOT_FOUND && missing.os_error != 0);
 	dy_String error_message;

@@ -25,6 +25,16 @@ static inline dy_Error dy_win32_error(DWORD error)
 	}
 }
 
+static inline dy_Result dy_win32_result(DWORD os_error)
+{
+	return (dy_Result){ .error = dy_win32_error(os_error), .os_error = os_error };
+}
+
+static inline dy_Result dy_win32_last_error(void)
+{
+	return dy_win32_result(GetLastError());
+}
+
 static inline char *dy_win32_text(dy_Arena *arena, dy_String string)
 {
 	char *result;

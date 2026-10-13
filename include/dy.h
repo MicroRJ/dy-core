@@ -169,10 +169,10 @@ dy_Process;
 
 typedef struct dy_Process_Start_Options
 {
-	// The first argument names the executable and is also passed as argv[0].
-	// Supply either arguments or a raw command line, never both.
+	// The executable is also exposed to the child as argv[0]. The arguments
+	// array contains only the values that follow argv[0].
+	dy_String executable;
 	dy_String_Array arguments;
-	dy_String command_line;
 	dy_String working_directory;
 	dy_Stream *standard_input;
 	dy_Stream *standard_output;
@@ -347,6 +347,7 @@ dy_b32 dy_string_starts_with(dy_String string, dy_String prefix);
 dy_b32 dy_string_ends_with(dy_String string, dy_String suffix);
 dy_b32 dy_string_ends_with_insensitive(dy_String string, dy_String suffix);
 dy_b32 dy_string_is(dy_String string, const char *text);
+dy_b32 dy_string_contains(dy_String string, char character);
 dy_String dy_string_trim_whitespace(dy_String string);
 dy_b32 dy_string_split_first(dy_String string, char separator, dy_String *left, dy_String *right);
 dy_String_Array dy_string_split(dy_Arena *arena, dy_String string, char separator);
