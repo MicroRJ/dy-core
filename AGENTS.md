@@ -81,3 +81,14 @@ Prefer inline code when temporary resources exist only to support one nearby
 operation and must remain alive until that operation completes. Keeping setup,
 the operation, and cleanup in one scope often makes ownership and lifetime more
 obvious than wrapping the same machinery in a one-off abstraction.
+
+## Reference Code
+
+Use `src/win32/dy_process.c` as the primary reference for the repository's C
+style and formatting. In particular, follow its use of braces, single-line
+signatures and conditions, declaration near initialization, explicit phase
+ordering, visible resource lifetimes, and centralized cleanup.
+
+Treat it as an example of the governing principles rather than a template to
+copy mechanically. Preserve simpler control flow when the code being changed
+does not require process-style validation, staged setup, or resource cleanup.
