@@ -119,7 +119,7 @@ static dy_Result dy_win32_duplicate_process_stream(dy_Stream *stream, DWORD stan
 	return result;
 }
 
-static dy_Result dy_win32_start_process_command(char *application, char *command, char *working_directory
+static dy_Result dy_win32_start_process_command(char *command, char *working_directory
 ,          dy_Stream  *standard_input
 ,          dy_Stream  *standard_output
 ,          dy_Stream  *standard_error
@@ -182,7 +182,7 @@ static dy_Result dy_win32_start_process_command(char *application, char *command
 		creation_flags |= EXTENDED_STARTUPINFO_PRESENT;
 	}
 
-	if (!CreateProcessA(application, command, NULL, NULL, redirect, creation_flags,
+	if (!CreateProcessA(NULL, command, NULL, NULL, redirect, creation_flags,
 		NULL, working_directory, &startup.StartupInfo, &process))
 	{
 		result.os_error = GetLastError();
@@ -209,17 +209,17 @@ dy_Result dy_process_start(dy_Process_Start_Options options, dy_Process *process
 {
 	dy_Result result = {0};
 	dy_Scratch scratch;
-	char *application;
 	char *command;
 	char *working_directory = NULL;
+	dy_b32 has_arguments = options.arguments.count != 0;
+	dy_b32 has_command_line = options.command_line.size != 0;
 	if (process_result) *process_result = (dy_Process){0};
-	if (!process_result || !options.arguments.items || options.arguments.count == 0 ||
-		!options.arguments.items[0].data || options.arguments.items[0].size == 0)
+	if (!process_result || has_arguments == has_command_line || (has_arguments && (!options.arguments.items || !options.arguments.items[0].data || options.arguments.items[0].size == 0)) || (has_command_line && (!options.command_line.data || dy_win32_string_has_zero(options.command_line))))
 	{
 		result.error = DY_ERROR_INVALID_ARGUMENT;
 		return result;
 	}
-	for (dy_u32 index = 0; index < options.arguments.count; ++index)
+	for (dy_u32 index = 0; has_arguments && index < options.arguments.count; ++index)
 	{
 		if ((!options.arguments.items[index].data && options.arguments.items[index].size) ||
 			dy_win32_string_has_zero(options.arguments.items[index]))
@@ -236,17 +236,24 @@ dy_Result dy_process_start(dy_Process_Start_Options options, dy_Process *process
 	}
 
 	scratch = dy_begin_scratch();
-	application = dy_win32_path_text(scratch.arena, options.arguments.items[0]);
 	if (options.working_directory.size)
 		working_directory = dy_win32_path_text(scratch.arena, options.working_directory);
-	command = dy_win32_command_line(scratch.arena, options.arguments);
-	if (!application || (options.working_directory.size && !working_directory) || !command)
+	if (has_command_line)
+	{
+		command = dy_arena_push_data(scratch.arena, options.command_line.data, options.command_line.size);
+		if (command && !dy_arena_push_char(scratch.arena, 0)) command = NULL;
+	}
+	else
+	{
+		command = dy_win32_command_line(scratch.arena, options.arguments);
+	}
+	if ((options.working_directory.size && !working_directory) || !command)
 	{
 		result.error = DY_ERROR_OUT_OF_MEMORY;
 		dy_end_scratch(scratch);
 		return result;
 	}
-	result = dy_win32_start_process_command(application, command, working_directory,
+	result = dy_win32_start_process_command(command, working_directory,
 		options.standard_input, options.standard_output, options.standard_error,
 		options.hide_window, process_result);
 	dy_end_scratch(scratch);

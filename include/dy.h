@@ -170,7 +170,9 @@ dy_Process;
 typedef struct dy_Process_Start_Options
 {
 	// The first argument names the executable and is also passed as argv[0].
+	// Supply either arguments or a raw command line, never both.
 	dy_String_Array arguments;
+	dy_String command_line;
 	dy_String working_directory;
 	dy_Stream *standard_input;
 	dy_Stream *standard_output;
