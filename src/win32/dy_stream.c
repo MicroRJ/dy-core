@@ -250,7 +250,7 @@ dy_Result dy_file_stream_open(dy_String path, dy_File_Intent intent,
 	{
 		return (dy_Result){ .error = DY_ERROR_INVALID_ARGUMENT };
 	}
-	result = dy_access_file(path, intent, access, &file);
+	result = dy_file_open(path, intent, access, &file);
 	if (result.error != DY_ERROR_NONE) return result;
 	if (access & DY_FILE_READ)
 		capabilities |= DY_STREAM_CAN_READ | DY_STREAM_CAN_READ_AVAILABLE;

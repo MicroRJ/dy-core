@@ -355,14 +355,15 @@ dy_String_Array dy_string_split_lines(dy_Arena *arena, dy_String string);
 dy_String_Array dy_string_split_block(dy_Arena *arena, dy_String string);
 dy_u32 dy_string_count_lines(dy_String string);
 
-dy_Result dy_access_file(dy_String path, dy_File_Intent intent, dy_File_Access access, dy_File *file);
+dy_Result dy_file_open(dy_String path, dy_File_Intent intent, dy_File_Access access, dy_File *file);
 dy_b32 dy_file_is_valid(dy_File file);
-dy_Result dy_close_file(dy_File file);
-dy_Result dy_get_file_info(dy_String path, dy_File_Info *info);
-dy_Result dy_get_file_size(dy_File file, dy_u64 *size);
-dy_Result dy_set_file_cursor(dy_File file, dy_Seek_Origin origin, dy_i64 distance, dy_u64 *position);
-dy_Result dy_read_file(dy_File file, void *data, dy_u64 size, dy_u64 *bytes_read);
-dy_Result dy_write_file(dy_File file, const void *data, dy_u64 size, dy_u64 *bytes_written);
+dy_Result dy_file_close(dy_File file);
+dy_Result dy_file_get_info(dy_String path, dy_File_Info *info);
+dy_Result dy_file_get_size(dy_File file, dy_u64 *size);
+dy_Result dy_file_set_cursor(dy_File file, dy_Seek_Origin origin, dy_i64 distance, dy_u64 *position);
+dy_Result dy_file_read(dy_File file, void *data, dy_u64 size, dy_u64 *bytes_read);
+dy_Result dy_file_write(dy_File file, const void *data, dy_u64 size, dy_u64 *bytes_written);
+dy_Result dy_file_flush(dy_File file);
 
 dy_Result dy_stream_read(dy_Stream *stream, void *data, dy_u64 size, dy_u32 flags,
 	dy_u64 *bytes_read);
@@ -387,9 +388,9 @@ dy_Result dy_get_current_directory(dy_Arena *arena, dy_String *path);
 dy_Result dy_set_current_directory(dy_String path);
 dy_Result dy_get_absolute_path(dy_Arena *arena, dy_String path, dy_String *absolute);
 dy_b32 dy_executable_resolves(dy_String name);
-dy_Result dy_copy_file(dy_String source, dy_String destination, dy_b32 overwrite);
-dy_Result dy_remove_file(dy_String path);
-dy_Result dy_move_file(dy_String source, dy_String destination, dy_b32 overwrite);
+dy_Result dy_file_copy(dy_String source, dy_String destination, dy_b32 overwrite);
+dy_Result dy_file_remove(dy_String path);
+dy_Result dy_file_move(dy_String source, dy_String destination, dy_b32 overwrite);
 dy_Result dy_create_directory(dy_String path);
 dy_Result dy_create_directories(dy_String path);
 dy_Result dy_remove_directory(dy_String path);

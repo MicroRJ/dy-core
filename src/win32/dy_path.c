@@ -247,7 +247,7 @@ dy_b32 dy_executable_resolves(dy_String name)
 	return length > 0 && length < capacity;
 }
 
-dy_Result dy_copy_file(dy_String source, dy_String destination, dy_b32 overwrite)
+dy_Result dy_file_copy(dy_String source, dy_String destination, dy_b32 overwrite)
 {
 	dy_Result result = {0};
 	dy_Scratch scratch;
@@ -276,7 +276,7 @@ dy_Result dy_copy_file(dy_String source, dy_String destination, dy_b32 overwrite
 	return result;
 }
 
-dy_Result dy_remove_file(dy_String path)
+dy_Result dy_file_remove(dy_String path)
 {
 	dy_Result result = {0};
 	dy_Scratch scratch;
@@ -304,7 +304,7 @@ dy_Result dy_remove_file(dy_String path)
 	return result;
 }
 
-dy_Result dy_move_file(dy_String source, dy_String destination, dy_b32 overwrite)
+dy_Result dy_file_move(dy_String source, dy_String destination, dy_b32 overwrite)
 {
 	dy_Result result = {0};
 	dy_Scratch scratch;

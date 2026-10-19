@@ -11,7 +11,7 @@ static HANDLE dy_win32_handle_from_file(dy_File file)
 	return (HANDLE)file.value;
 }
 
-dy_Result dy_access_file(dy_String path, dy_File_Intent intent, dy_File_Access access, dy_File *file)
+dy_Result dy_file_open(dy_String path, dy_File_Intent intent, dy_File_Access access, dy_File *file)
 {
 	dy_Result result = {0};
 	dy_Scratch scratch;
@@ -75,7 +75,7 @@ dy_b32 dy_file_is_valid(dy_File file)
 	return file.value != 0 && dy_win32_handle_from_file(file) != INVALID_HANDLE_VALUE;
 }
 
-dy_Result dy_close_file(dy_File file)
+dy_Result dy_file_close(dy_File file)
 {
 	dy_Result result = {0};
 	if (!dy_file_is_valid(file))
@@ -91,7 +91,7 @@ dy_Result dy_close_file(dy_File file)
 	return result;
 }
 
-dy_Result dy_get_file_info(dy_String path, dy_File_Info *info)
+dy_Result dy_file_get_info(dy_String path, dy_File_Info *info)
 {
 	dy_Result result = {0};
 	dy_Scratch scratch;
@@ -134,7 +134,7 @@ dy_Result dy_get_file_info(dy_String path, dy_File_Info *info)
 	return result;
 }
 
-dy_Result dy_get_file_size(dy_File file, dy_u64 *size)
+dy_Result dy_file_get_size(dy_File file, dy_u64 *size)
 {
 	dy_Result result = {0};
 	LARGE_INTEGER value;
@@ -154,7 +154,7 @@ dy_Result dy_get_file_size(dy_File file, dy_u64 *size)
 	return result;
 }
 
-dy_Result dy_set_file_cursor(dy_File file, dy_Seek_Origin origin, dy_i64 distance, dy_u64 *position)
+dy_Result dy_file_set_cursor(dy_File file, dy_Seek_Origin origin, dy_i64 distance, dy_u64 *position)
 {
 	dy_Result result = {0};
 	static const DWORD origins[] = { FILE_BEGIN, FILE_CURRENT, FILE_END };
@@ -177,7 +177,7 @@ dy_Result dy_set_file_cursor(dy_File file, dy_Seek_Origin origin, dy_i64 distanc
 	return result;
 }
 
-dy_Result dy_read_file(dy_File file, void *data, dy_u64 size, dy_u64 *bytes_read)
+dy_Result dy_file_read(dy_File file, void *data, dy_u64 size, dy_u64 *bytes_read)
 {
 	dy_Result result = {0};
 	dy_u64 total = 0;
@@ -206,7 +206,7 @@ dy_Result dy_read_file(dy_File file, void *data, dy_u64 size, dy_u64 *bytes_read
 	return result;
 }
 
-dy_Result dy_write_file(dy_File file, const void *data, dy_u64 size, dy_u64 *bytes_written)
+dy_Result dy_file_write(dy_File file, const void *data, dy_u64 size, dy_u64 *bytes_written)
 {
 	dy_Result result = {0};
 	dy_u64 total = 0;
@@ -237,5 +237,20 @@ dy_Result dy_write_file(dy_File file, const void *data, dy_u64 size, dy_u64 *byt
 		}
 	}
 	*bytes_written = total;
+	return result;
+}
+
+dy_Result dy_file_flush(dy_File file)
+{
+	dy_Result result = {0};
+	if (!dy_file_is_valid(file))
+	{
+		result.error = DY_ERROR_INVALID_ARGUMENT;
+	}
+	else if (!FlushFileBuffers(dy_win32_handle_from_file(file)))
+	{
+		result.os_error = GetLastError();
+		result.error = dy_win32_error(result.os_error);
+	}
 	return result;
 }

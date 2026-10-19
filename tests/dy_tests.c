@@ -73,17 +73,18 @@ int main(int argument_count, char **arguments)
 	dy_u64 size;
 	const char expected[] = "dy";
 	char actual[sizeof(expected)] = {0};
-	assert(dy_access_file(DY_LIT("build/dy_test/a/source.tmp"), DY_FILE_CREATE_ALWAYS,
-		DY_FILE_READ | DY_FILE_WRITE | DY_FILE_SHARE_READ, &file).error == DY_ERROR_NONE);
+	assert(dy_file_open(DY_LIT("build/dy_test/a/source.tmp"), DY_FILE_CREATE_ALWAYS, DY_FILE_READ | DY_FILE_WRITE | DY_FILE_SHARE_READ, &file).error == DY_ERROR_NONE);
 	assert(dy_file_is_valid(file));
-	assert(dy_write_file(file, expected, sizeof(expected), &transferred).error == DY_ERROR_NONE);
+	assert(dy_file_write(file, expected, sizeof(expected), &transferred).error == DY_ERROR_NONE);
 	assert(transferred == sizeof(expected));
-	assert(dy_get_file_size(file, &size).error == DY_ERROR_NONE && size == sizeof(expected));
+	assert(dy_file_flush(file).error == DY_ERROR_NONE);
+	assert(dy_file_get_size(file, &size).error == DY_ERROR_NONE && size == sizeof(expected));
 	dy_u64 position;
-	assert(dy_set_file_cursor(file, DY_SEEK_BEGIN, 0, &position).error == DY_ERROR_NONE && position == 0);
-	assert(dy_read_file(file, actual, sizeof(actual), &transferred).error == DY_ERROR_NONE);
+	assert(dy_file_set_cursor(file, DY_SEEK_BEGIN, 0, &position).error == DY_ERROR_NONE && position == 0);
+	assert(dy_file_read(file, actual, sizeof(actual), &transferred).error == DY_ERROR_NONE);
 	assert(transferred == sizeof(actual) && memcmp(actual, expected, sizeof(expected)) == 0);
-	assert(dy_close_file(file).error == DY_ERROR_NONE);
+	assert(dy_file_close(file).error == DY_ERROR_NONE);
+	assert(dy_file_flush((dy_File){0}).error == DY_ERROR_INVALID_ARGUMENT);
 
 	dy_Stream *file_stream;
 	assert(dy_file_stream_open(DY_LIT("build/dy_test/a/stream.tmp"), DY_FILE_CREATE_ALWAYS,
@@ -122,13 +123,11 @@ int main(int argument_count, char **arguments)
 	dy_pipe_close(&pipe);
 
 	dy_File_Info info;
-	assert(dy_get_file_info(DY_LIT("build/dy_test/a/source.tmp"), &info).error == DY_ERROR_NONE);
+	assert(dy_file_get_info(DY_LIT("build/dy_test/a/source.tmp"), &info).error == DY_ERROR_NONE);
 	assert(info.size == sizeof(expected) && !info.is_directory && info.modified_unix_ms > 0);
-	assert(dy_move_file(DY_LIT("build/dy_test/a/source.tmp"),
-		DY_LIT("build/dy_test/a/moved.tmp"), 0).error == DY_ERROR_NONE);
-	assert(dy_copy_file(DY_LIT("build/dy_test/a/moved.tmp"),
-		DY_LIT("build/dy_test/a/copied.tmp"), 0).error == DY_ERROR_NONE);
-	assert(dy_remove_file(DY_LIT("build/dy_test/a/copied.tmp")).error == DY_ERROR_NONE);
+	assert(dy_file_move(DY_LIT("build/dy_test/a/source.tmp"), DY_LIT("build/dy_test/a/moved.tmp"), 0).error == DY_ERROR_NONE);
+	assert(dy_file_copy(DY_LIT("build/dy_test/a/moved.tmp"), DY_LIT("build/dy_test/a/copied.tmp"), 0).error == DY_ERROR_NONE);
+	assert(dy_file_remove(DY_LIT("build/dy_test/a/copied.tmp")).error == DY_ERROR_NONE);
 
 	char path_storage[1024];
 	dy_Path_Builder path;
