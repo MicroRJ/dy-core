@@ -55,6 +55,12 @@ int main(int argument_count, char **arguments)
 	assert(!dy_string_contains(DY_LIT("abc"), 'x'));
 	assert(dy_string_contains(dy_string_from_data(embedded_zero, sizeof(embedded_zero)), 0));
 	assert(!dy_string_contains(DY_LIT("abc"), 0));
+	dy_String pushed_data = dy_arena_push_data(&arena, embedded_zero, sizeof(embedded_zero));
+	assert(pushed_data.size == sizeof(embedded_zero) && dy_memory_equal(pushed_data.data, embedded_zero, pushed_data.size));
+	dy_String pushed_text = dy_arena_push_text(&arena, "text");
+	assert(dy_string_equal(pushed_text, DY_LIT("text")));
+	dy_String pushed_format = dy_arena_pushf(&arena, "%s %d", "value", 42);
+	assert(dy_string_equal(pushed_format, DY_LIT("value 42")));
 	void *memory = dy_virtual_reserve(DY_KILOBYTES(4));
 	assert(memory && dy_virtual_commit(memory, DY_KILOBYTES(4)));
 	memset(memory, 0x5a, DY_KILOBYTES(4));

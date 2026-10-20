@@ -127,12 +127,12 @@ dy_Result dy_get_env_table(dy_Arena *arena, dy_Env_Table *table)
 		while (separator < size && cursor[separator] != '=') ++separator;
 		if (separator == size) continue;
 		field = table->items + table->count;
-		field->name.data = dy_arena_push_data(arena, cursor, separator);
-		field->name.size = separator;
-		if (!field->name.data || !dy_arena_push_char(arena, 0)) goto out_of_memory;
-		field->value.data = dy_arena_push_data(arena, cursor + separator + 1, size - separator - 1);
-		field->value.size = size - separator - 1;
-		if (!field->value.data || !dy_arena_push_char(arena, 0)) goto out_of_memory;
+		field->name = dy_arena_push_data(arena, cursor, separator);
+		if (!field->name.data) goto out_of_memory;
+		if (!dy_arena_push_zero(arena, 1, 1)) goto out_of_memory;
+		field->value = dy_arena_push_data(arena, cursor + separator + 1, size - separator - 1);
+		if (!field->value.data) goto out_of_memory;
+		if (!dy_arena_push_zero(arena, 1, 1)) goto out_of_memory;
 		++table->count;
 	}
 	FreeEnvironmentStringsA(block);

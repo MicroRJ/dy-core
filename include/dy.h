@@ -325,12 +325,10 @@ void *dy_arena_reserve(dy_Arena *arena, dy_u64 size);
 void *dy_arena_push(dy_Arena *arena, dy_u64 size, dy_u64 alignment);
 void *dy_arena_push_zero(dy_Arena *arena, dy_u64 size, dy_u64 alignment);
 void *dy_arena_push_copy(dy_Arena *arena, dy_u64 size, dy_u64 alignment, const void *data);
-char *dy_arena_push_data(dy_Arena *arena, const void *data, dy_u64 size);
-char *dy_arena_push_text(dy_Arena *arena, const char *text);
-char *dy_arena_push_char(dy_Arena *arena, char character);
-void dy_arena_push_nchar(dy_Arena *arena, char character, dy_u64 count);
-char *dy_arena_pushfv(dy_Arena *arena, const char *format, va_list arguments);
-char *dy_arena_pushf(dy_Arena *arena, const char *format, ...);
+dy_String dy_arena_push_data(dy_Arena *arena, const void *data, dy_u64 size);
+dy_String dy_arena_push_text(dy_Arena *arena, const char *text);
+dy_String dy_arena_pushfv(dy_Arena *arena, const char *format, va_list arguments);
+dy_String dy_arena_pushf(dy_Arena *arena, const char *format, ...);
 
 dy_Scratch dy_begin_scratch(void);
 dy_Scratch dy_begin_different_scratch(dy_Arena *conflict);

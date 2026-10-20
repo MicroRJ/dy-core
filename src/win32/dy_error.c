@@ -10,7 +10,6 @@ dy_Result dy_error_message(dy_Arena *arena, dy_u32 os_error, dy_String *message_
 	dy_Result result = {0};
 	dy_u64 mark;
 	char *system_message = NULL;
-	char *message;
 	DWORD length;
 	if (message_result) *message_result = (dy_String){0};
 	if (!arena || !message_result || os_error == 0)
@@ -29,13 +28,25 @@ dy_Result dy_error_message(dy_Arena *arena, dy_u32 os_error, dy_String *message_
 	while (length && (system_message[length - 1] == '\r' || system_message[length - 1] == '\n' ||
 		system_message[length - 1] == ' ')) --length;
 	mark = dy_arena_mark(arena);
-	message = dy_arena_push_data(arena, system_message, length);
-	if (!message || !dy_arena_push_char(arena, 0))
+	dy_String message = dy_arena_push_data(arena, system_message, length);
+	if (!message.data)
 	{
 		dy_arena_restore(arena, mark);
 		result.error = DY_ERROR_OUT_OF_MEMORY;
 	}
-	else *message_result = dy_string_from_data(message, length);
+	else
+	{
+		void *terminator = dy_arena_push_zero(arena, 1, 1);
+		if (!terminator)
+		{
+			dy_arena_restore(arena, mark);
+			result.error = DY_ERROR_OUT_OF_MEMORY;
+		}
+		else
+		{
+			*message_result = message;
+		}
+	}
 	LocalFree(system_message);
 	return result;
 }

@@ -116,54 +116,44 @@ void *dy_arena_push_copy(dy_Arena *arena, dy_u64 size, dy_u64 alignment, const v
 	return result;
 }
 
-char *dy_arena_push_data(dy_Arena *arena, const void *data, dy_u64 size)
+dy_String dy_arena_push_data(dy_Arena *arena, const void *data, dy_u64 size)
 {
-	return dy_arena_push_copy(arena, size, 1, data);
+	dy_String result = {0};
+	result.data = dy_arena_push_copy(arena, size, 1, data);
+	if (result.data) result.size = size;
+	return result;
 }
 
-char *dy_arena_push_text(dy_Arena *arena, const char *text)
+dy_String dy_arena_push_text(dy_Arena *arena, const char *text)
 {
 	return dy_arena_push_data(arena, text, text ? (dy_u64)strlen(text) : 0);
 }
 
-char *dy_arena_push_char(dy_Arena *arena, char character)
+dy_String dy_arena_pushfv(dy_Arena *arena, const char *format, va_list arguments)
 {
-	char *result = dy_arena_push(arena, 1, 1);
-	if (result) *result = character;
-	return result;
-}
-
-void dy_arena_push_nchar(dy_Arena *arena, char character, dy_u64 count)
-{
-	void *result = dy_arena_push(arena, count, 1);
-	if (result && count) memset(result, character, (size_t)count);
-}
-
-char *dy_arena_pushfv(dy_Arena *arena, const char *format, va_list arguments)
-{
+	dy_String result = {0};
 	va_list copy;
-	int length;
-	char *result;
-
 	va_copy(copy, arguments);
-	length = vsnprintf(NULL, 0, format, copy);
+	int length = vsnprintf(NULL, 0, format, copy);
 	va_end(copy);
 	assert(length >= 0);
-	if (length < 0) return NULL;
-
-	result = dy_arena_reserve(arena, (dy_u64)length + 1);
-	if (!result) return NULL;
-	if (vsnprintf(result, (size_t)length + 1, format, arguments) != length) return NULL;
-	arena->used += (dy_u64)length;
+	if (length >= 0)
+	{
+		char *data = dy_arena_reserve(arena, (dy_u64)length + 1);
+		if (data && vsnprintf(data, (size_t)length + 1, format, arguments) == length)
+		{
+			arena->used += (dy_u64)length;
+			result = dy_string_from_data(data, (dy_u64)length);
+		}
+	}
 	return result;
 }
 
-char *dy_arena_pushf(dy_Arena *arena, const char *format, ...)
+dy_String dy_arena_pushf(dy_Arena *arena, const char *format, ...)
 {
 	va_list arguments;
-	char *result;
 	va_start(arguments, format);
-	result = dy_arena_pushfv(arena, format, arguments);
+	dy_String result = dy_arena_pushfv(arena, format, arguments);
 	va_end(arguments);
 	return result;
 }
