@@ -3,6 +3,8 @@
 
 #include "dy.h"
 
+#define DY_WAIT_INFINITE ((dy_u32)-1)
+
 typedef struct dy_Stream dy_Stream;
 
 typedef struct dy_Stream_Ops

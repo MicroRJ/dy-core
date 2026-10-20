@@ -104,8 +104,6 @@ typedef struct dy_Result
 }
 dy_Result;
 
-#define DY_WAIT_INFINITE ((dy_u32)-1)
-
 #define DY_LIT(text) ((dy_String){ .data = (char *)(text), .size = sizeof(text) - 1 })
 
 void *dy_virtual_reserve(dy_u64 size);
