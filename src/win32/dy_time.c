@@ -1,6 +1,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 
+#include "dy_time.h"
 #include "dy_win32.h"
 
 dy_u64 dy_counter(void)

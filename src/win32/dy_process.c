@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "dy_process.h"
 #include "../dy_stream_internal.h"
 #include "dy_win32.h"
 

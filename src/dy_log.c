@@ -1,4 +1,5 @@
-#include "dy.h"
+#include "dy_log.h"
+#include "dy_io.h"
 
 #include <stdarg.h>
 #include <stdio.h>

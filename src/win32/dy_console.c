@@ -1,6 +1,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 
+#include "dy_io.h"
 #include "dy_win32.h"
 
 static HANDLE dy_win32_standard_stream(dy_Standard_Stream stream)

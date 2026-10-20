@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <string.h>
 
+#include "dy_process.h"
 #include "dy_win32.h"
 
 static dy_b32 dy_win32_env_name_is_valid(dy_String name)

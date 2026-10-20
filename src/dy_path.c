@@ -1,4 +1,4 @@
-#include "dy.h"
+#include "dy_fs.h"
 
 static dy_b32 dy_path_is_separator(char character)
 {
@@ -87,7 +87,7 @@ dy_Result dy_create_directories(dy_String path)
 	if (root >= builder.size)
 	{
 		dy_File_Info info;
-		result = dy_file_get_info(dy_string_from_data(builder.data, builder.size), &info);
+		result = dy_file_info(dy_string_from_data(builder.data, builder.size), &info);
 		if (!result.error && !info.is_directory) result.error = DY_ERROR_ALREADY_EXISTS;
 		dy_end_scratch(scratch);
 		return result;
@@ -117,7 +117,7 @@ static dy_Result dy_remove_tree_builder(dy_Path_Builder *path)
 	dy_Directory_Entry entry;
 	dy_Directory_Status status;
 	dy_String root_path = dy_string_from_data(path->data, path->size);
-	result = dy_file_get_info(root_path, &root);
+	result = dy_file_info(root_path, &root);
 	if (result.error == DY_ERROR_NOT_FOUND) return (dy_Result){0};
 	if (result.error) return result;
 	if (!root.is_directory)

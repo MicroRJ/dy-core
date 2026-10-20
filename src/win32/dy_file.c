@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <string.h>
 
+#include "dy_fs.h"
 #include "dy_win32.h"
 
 static HANDLE dy_win32_handle_from_file(dy_File file)
@@ -91,7 +92,7 @@ dy_Result dy_file_close(dy_File file)
 	return result;
 }
 
-dy_Result dy_file_get_info(dy_String path, dy_File_Info *info)
+dy_Result dy_file_info(dy_String path, dy_File_Info *info)
 {
 	dy_Result result = {0};
 	dy_Scratch scratch;
@@ -134,7 +135,7 @@ dy_Result dy_file_get_info(dy_String path, dy_File_Info *info)
 	return result;
 }
 
-dy_Result dy_file_get_size(dy_File file, dy_u64 *size)
+dy_Result dy_file_size(dy_File file, dy_u64 *size)
 {
 	dy_Result result = {0};
 	LARGE_INTEGER value;

@@ -1,6 +1,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 
+#include "dy_thread.h"
 #include "dy_win32.h"
 
 typedef struct dy_Win32_Thread_Start

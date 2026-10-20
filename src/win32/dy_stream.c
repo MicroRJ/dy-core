@@ -3,6 +3,7 @@
 
 #include <stdlib.h>
 
+#include "dy_fs.h"
 #include "../dy_stream_internal.h"
 #include "dy_win32.h"
 

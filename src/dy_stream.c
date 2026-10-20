@@ -1,4 +1,4 @@
-#include "dy.h"
+#include "dy_io.h"
 
 static dy_Result dy_stream_unsupported(void)
 {

@@ -1,4 +1,9 @@
 #include "dy.h"
+#include "dy_fs.h"
+#include "dy_io.h"
+#include "dy_process.h"
+#include "dy_thread.h"
+#include "dy_time.h"
 
 #include <assert.h>
 #include <stdio.h>
@@ -84,7 +89,7 @@ int main(int argument_count, char **arguments)
 	assert(dy_file_write(file, expected, sizeof(expected), &transferred).error == DY_ERROR_NONE);
 	assert(transferred == sizeof(expected));
 	assert(dy_file_flush(file).error == DY_ERROR_NONE);
-	assert(dy_file_get_size(file, &size).error == DY_ERROR_NONE && size == sizeof(expected));
+	assert(dy_file_size(file, &size).error == DY_ERROR_NONE && size == sizeof(expected));
 	dy_u64 position;
 	assert(dy_file_set_cursor(file, DY_SEEK_BEGIN, 0, &position).error == DY_ERROR_NONE && position == 0);
 	assert(dy_file_read(file, actual, sizeof(actual), &transferred).error == DY_ERROR_NONE);
@@ -129,7 +134,7 @@ int main(int argument_count, char **arguments)
 	dy_pipe_close(&pipe);
 
 	dy_File_Info info;
-	assert(dy_file_get_info(DY_LIT("build/dy_test/a/source.tmp"), &info).error == DY_ERROR_NONE);
+	assert(dy_file_info(DY_LIT("build/dy_test/a/source.tmp"), &info).error == DY_ERROR_NONE);
 	assert(info.size == sizeof(expected) && !info.is_directory && info.modified_unix_ms > 0);
 	assert(dy_file_move(DY_LIT("build/dy_test/a/source.tmp"), DY_LIT("build/dy_test/a/moved.tmp"), 0).error == DY_ERROR_NONE);
 	assert(dy_file_copy(DY_LIT("build/dy_test/a/moved.tmp"), DY_LIT("build/dy_test/a/copied.tmp"), 0).error == DY_ERROR_NONE);

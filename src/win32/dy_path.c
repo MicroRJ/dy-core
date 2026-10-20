@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <string.h>
 
+#include "dy_fs.h"
 #include "dy_win32.h"
 
 static void dy_win32_canonicalize_path(char *path, dy_u64 size)
